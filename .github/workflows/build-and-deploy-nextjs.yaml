@@ -267,7 +267,7 @@ jobs:
           if [ -f /tmp/snapshots.tar ]; then
             tar xf /tmp/snapshots.tar
             echo "Restored snapshot files:"
-            find tests -path '*-snapshots/*.png' -type f | head -10
+            find tests -path '*-snapshots/*.png' -type f | head -10 || true
           else
             echo "No snapshots.tar found — nothing to restore"
           fi
