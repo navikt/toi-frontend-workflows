@@ -1,0 +1,12 @@
+name: 'Kjør Playwright tester'
+description: 'Kjører Playwright testene via pnpm'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Playwright
+      shell: bash
+      run: |
+        echo "::group::Kjører Playwright tester"
+        pnpm test
+        echo "::endgroup::"

@@ -1,0 +1,98 @@
+name: 'Bygg og deploy Storybook'
+description: 'Kjører hele Storybook-pipelinen med valgfri distribusjon til GitHub Pages'
+
+inputs:
+  use-pnpm:
+    description: 'Settes til true for å bruke pnpm'
+    required: false
+    default: 'false'
+  pnpm-version:
+    description: 'pnpm-versjon når pnpm benyttes'
+    required: false
+    default: '9.14.2'
+  node-version:
+    description: 'Node-versjon som skal installeres'
+    required: false
+    default: '22.20.0'
+  registry-url:
+    description: 'NPM registry som skal brukes'
+    required: false
+    default: 'https://npm.pkg.github.com'
+  output-dir:
+    description: 'Mappen Storybook bygges til'
+    required: false
+    default: 'storybook-static'
+  storybook-base-path:
+    description: 'Base path for Storybook'
+    required: false
+    default: ''
+  deploy-to-pages:
+    description: 'Settes til true for å deploye til GitHub Pages'
+    required: false
+    default: 'false'
+  pages-branch:
+    description: 'Branch for GitHub Pages'
+    required: false
+    default: 'gh-pages'
+  pages-target-folder:
+    description: 'Mappen på gh-pages-branchen'
+    required: false
+    default: 'storybook'
+  github-token:
+    description: 'Token som brukes av GitHub Pages deployment'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 🔄 Hent Kildekode
+      uses: actions/checkout@v5
+
+    - name: 📥 Sett opp pnpm
+      if: ${{ inputs['use-pnpm'] == 'true' }}
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ inputs['pnpm-version'] }}
+
+    - name: 📦 Sett opp Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs['node-version'] }}
+        registry-url: ${{ inputs['registry-url'] }}
+
+    - name: 📥 Installer Avhengigheter
+      shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ env.NODE_AUTH_TOKEN }}
+      run: |
+        echo "::group::Installerer avhengigheter"
+        if [ "${{ inputs['use-pnpm'] }}" = "true" ]; then
+          pnpm install --frozen-lockfile
+        else
+          npm ci
+        fi
+        echo "::endgroup::"
+
+    - name: 🏗️ Bygg Storybook
+      shell: bash
+      env:
+        STORYBOOK_BASE_PATH: ${{ inputs['storybook-base-path'] }}
+      run: |
+        echo "::group::Bygger Storybook"
+        if [ "${{ inputs['use-pnpm'] }}" = "true" ]; then
+          pnpm build-storybook --output-dir "${{ inputs['output-dir'] }}"
+        else
+          npm run build-storybook -- --output-dir "${{ inputs['output-dir'] }}"
+        fi
+        echo "::endgroup::"
+
+    - name: 🚀 Deploy Storybook til GitHub Pages
+      if: ${{ inputs['deploy-to-pages'] == 'true' }}
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        branch: ${{ inputs['pages-branch'] }}
+        folder: ${{ inputs['output-dir'] }}
+        clean: false
+        target-folder: ${{ inputs['pages-target-folder'] }}
+        token: ${{ inputs['github-token'] }}

@@ -1,0 +1,11 @@
+name: 'Kjør Pa11y'
+description: 'Kjører Pa11y tilgjengelighetstester'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Pa11y
+      shell: bash
+      run: |
+        export PUPPETEER_EXECUTABLE_PATH="$(node -e "console.log(require('@playwright/test').chromium.executablePath())")"
+        pnpm pa11y-ci

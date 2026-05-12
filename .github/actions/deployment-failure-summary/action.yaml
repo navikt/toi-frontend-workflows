@@ -1,0 +1,25 @@
+name: 'Deployment Oppsummering (feil)'
+description: 'Legger til en feilmelding i GITHUB_STEP_SUMMARY'
+
+inputs:
+  image:
+    description: 'Image som feilet'
+    required: true
+  branch:
+    description: 'Branchnavn'
+    required: true
+  environment:
+    description: 'Miljø som ble forsøkt deployet til'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Feiloppsummering
+      shell: bash
+      run: |
+        echo "## Deployment Feilet ❌" >> "$GITHUB_STEP_SUMMARY"
+        echo "* Image: \`${{ inputs.image }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "* Branch: \`${{ inputs.branch }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "* Miljø: ${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
+        echo "Vennligst sjekk loggene for mer informasjon." >> "$GITHUB_STEP_SUMMARY"

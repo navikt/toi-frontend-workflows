@@ -1,0 +1,392 @@
+on:
+  workflow_call:
+    inputs:
+      deploy-to-dev-only:
+        required: false
+        type: boolean
+        default: false
+      deploy-dev-branch:
+        required: false
+        type: string
+      deploy-dev2-branch:
+        required: false
+        type: string
+      dev-vars-path:
+        required: false
+        type: string
+        description: 'Path to VARS file for NAIS deployment'
+        default: ''
+      dev2-vars-path:
+        required: false
+        type: string
+        description: 'Path to VARS file for NAIS deployment'
+        default: ''
+      prod-vars-path:
+        required: false
+        type: string
+        description: 'Path to VARS file for NAIS deployment'
+        default: ''
+      dev-yaml-path:
+        required: false
+        type: string
+        description: 'Path to YAML file for NAIS deployment'
+        default: '.nais/app.yaml'
+      dev2-yaml-path:
+        required: false
+        type: string
+        description: 'Path to YAML file for NAIS deployment'
+        default: '.nais/app.yaml'
+      prod-yaml-path:
+        required: false
+        type: string
+        description: 'Path to YAML file for NAIS deployment'
+        default: '.nais/app.yaml'
+      nais-alerts-path:
+        required: false
+        type: string
+        description: 'Path to nais alert file'
+        default: '.nais/alerts.yaml'
+      nais-team:
+        required: false
+        type: string
+        default: 'toi'
+        description: 'NAIS-team som image bygges for'
+      node-version:
+        required: false
+        type: string
+        default: '22.20.0'
+      pnpm-version:
+        required: false
+        type: string
+        default: '9.14.2'
+      playwright-command:
+        required: false
+        type: string
+        default: ''
+        description: 'Kommando for å kjøre Playwright-tester, f.eks. pnpm test'
+      playwright-github-report:
+        required: false
+        type: boolean
+        default: false
+      playwright-snapshots:
+        required: false
+        type: boolean
+        default: false
+        description: 'Oppdater og commit Playwright snapshots automatisk i PR'
+      storybook:
+        required: false
+        type: boolean
+        default: false
+      storybook-base-path:
+        required: false
+        type: string
+        default: ''
+        description: 'Base path for Storybook (f.eks. /min-app/storybook/)'
+      a11y-command:
+        required: false
+        type: string
+        default: ''
+        description: 'Kommando for å kjøre a11y-tester, f.eks. pnpm pa11y-ci'
+jobs:
+  build:
+    name: 🏗️ Bygg applikasjon
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔄 Hent Kildekode
+        uses: actions/checkout@v5
+
+      - name: 📥 Sett opp pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ inputs.pnpm-version }}
+
+      - name: 📦 Sett opp Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: 📥 Installer Avhengigheter
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v1
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
+
+      - name: 🛠️ Bygg Next applikasjon
+        uses: navikt/toi-frontend-workflows/.github/actions/build-next-pnpm@v1
+
+      - name: Cache workspace
+        uses: actions/cache/save@v4
+        with:
+          path: .
+          key: workspace-${{ github.sha }}
+
+      - name: 🐳 Last opp Docker-image til GAR
+        id: docker-build-push
+        uses: nais/docker-build-push@v0
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
+        with:
+          team: ${{ inputs.nais-team }}
+          build_secrets: 'NODE_AUTH_TOKEN=${{ secrets.READER_TOKEN }}'
+          tag: ${{ contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) && 'latest' || github.sha }}
+    outputs:
+      image: ${{ steps.docker-build-push.outputs.image }}
+
+  test-build:
+    name: 🧪 Bygg for testing
+    if: ${{ inputs.playwright-command != '' || inputs.a11y-command != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔄 Hent Kildekode
+        uses: actions/checkout@v5
+
+      - name: 📥 Sett opp pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ inputs.pnpm-version }}
+
+      - name: 📦 Sett opp Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: 📥 Installer Avhengigheter
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v1
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
+
+      - name: 🛠️ Bygg for test
+        shell: bash
+        run: pnpm test-build
+
+      - name: Cache test workspace
+        uses: actions/cache/save@v4
+        with:
+          path: .
+          key: test-workspace-${{ github.sha }}
+
+  call-trivy-security-scan:
+    name: 🔒 Security Scan
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      security-events: write
+    steps:
+      - name: Kjør Trivy scan
+        uses: navikt/toi-github-actions-workflows/.github/actions/trivy-scan@v12
+        with:
+          image: ${{ needs.build.outputs.image }}
+
+  deploy-til-dev:
+    name: 🚀 Deploy til dev-gcp
+    needs:
+      - build
+    if: contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) || github.ref == format('refs/heads/{0}', inputs.deploy-dev-branch)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔄 Hent Kildekode
+        uses: actions/checkout@v5
+
+      - name: 📦 Deploy til Dev
+        uses: nais/deploy/actions/deploy@v2
+        env:
+          CLUSTER: dev-gcp
+          RESOURCE: ${{ inputs.dev-yaml-path }}
+          VAR: image=${{ needs.build.outputs.image }}
+          VARS: ${{ inputs.dev-vars-path }}
+
+  deploy-til-dev2:
+    name: 🚀 Deploy til dev2
+    needs:
+      - build
+    if: contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) || github.ref == format('refs/heads/{0}', inputs.deploy-dev2-branch)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔄 Hent Kildekode
+        uses: actions/checkout@v5
+
+      - name: 📂 Sjekk om dev2-gcp.json finnes
+        id: check-dev2-file
+        run: |
+          if [ -f ".nais/dev2-gcp.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📦 Deploy til dev2
+        if: steps.check-dev2-file.outputs.exists == 'true'
+        uses: nais/deploy/actions/deploy@v2
+        env:
+          CLUSTER: dev-gcp
+          RESOURCE: ${{ inputs.dev2-yaml-path }}
+          VAR: image=${{ needs.build.outputs.image }}
+          VARS: ${{ inputs.dev2-vars-path }}
+
+  playwright-tests:
+    name: 🎭 Playwright Tests
+    if: ${{ inputs.playwright-command != '' }}
+    needs: [test-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    steps:
+      - name: 🚀 Start testserver
+        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v1
+
+      - name: 🎭 Playwright
+        shell: bash
+        run: ${{ inputs.playwright-command }}${{ inputs.playwright-snapshots && ' -- --update-snapshots' || '' }}
+
+      - name: 📸 Lagre snapshots midlertidig
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        shell: bash
+        run: |
+          find tests -path '*-snapshots/*.png' -type f > /tmp/snapshot-files.txt
+          echo "Found $(wc -l < /tmp/snapshot-files.txt) snapshot files:"
+          cat /tmp/snapshot-files.txt
+          if [ -s /tmp/snapshot-files.txt ]; then
+            tar cf /tmp/snapshots.tar -T /tmp/snapshot-files.txt
+          fi
+
+      - name: 🔄 Hent kildekode for snapshot-commit
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: 📸 Gjenopprett snapshots
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        shell: bash
+        run: |
+          if [ -f /tmp/snapshots.tar ]; then
+            tar xf /tmp/snapshots.tar
+            echo "Restored snapshot files:"
+            find tests -path '*-snapshots/*.png' -type f | head -10
+          else
+            echo "No snapshots.tar found — nothing to restore"
+          fi
+
+      - name: 📸 Commit oppdaterte snapshots
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        shell: bash
+        run: |
+          shopt -s globstar
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tests/**/*-snapshots/**/*.png
+
+          for file in $(git diff --cached --name-only -- '*.png'); do
+            if git cat-file -e HEAD:"$file" 2>/dev/null; then
+              git show HEAD:"$file" > /tmp/old_snapshot.png
+              PIXELS=$(compare -metric AE /tmp/old_snapshot.png "$file" null: 2>&1 || true)
+              if [ "$PIXELS" = "0" ]; then
+                echo "Ingen visuell endring: $file"
+                git checkout HEAD -- "$file"
+              fi
+            fi
+          done
+
+          if git diff --cached --quiet; then
+            echo "No snapshot changes to commit"
+          else
+            git commit -m "oppdater playwright snapshots"
+            git push
+          fi
+      - uses: actions/upload-artifact@v4
+        if: ${{  contains(fromJSON('["refs/heads/main"]'), github.ref) && !cancelled() && inputs.playwright-github-report == true }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Setup GitHub Pages
+        if: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) && !cancelled() && inputs.playwright-github-report == true }}
+        uses: actions/configure-pages@v3
+
+      - name: Deploy Playwright Report to GitHub Pages
+        if: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) && !cancelled() && inputs.playwright-github-report == true }}
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: playwright-report
+          clean: false
+          target-folder: playwright-report
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  a11y-tests:
+    name: ♿ Pa11y
+    if: ${{ inputs.a11y-command != '' }}
+    needs: [test-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 🚀 Start testserver
+        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v1
+
+      - name: ♿ Pa11y
+        shell: bash
+        run: ${{ inputs.a11y-command }}
+
+  storybook:
+    name: 📚 Storybook
+    needs: [build]
+    if: ${{ inputs.storybook == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 📚 Bygg og deploy Storybook
+        uses: navikt/toi-frontend-workflows/.github/actions/build-storybook@v1
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
+        with:
+          use-pnpm: true
+          pnpm-version: ${{ inputs.pnpm-version }}
+          node-version: ${{ inputs.node-version }}
+          storybook-base-path: ${{ inputs.storybook-base-path }}
+          deploy-to-pages: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-til-prod:
+    name: 🚀 Deploy til prod-gcp
+    needs:
+      - build
+      - deploy-til-dev
+      - playwright-tests
+      - a11y-tests
+    if: ${{ always() && !inputs.deploy-to-dev-only && contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) && needs.deploy-til-dev.result == 'success' && (inputs.playwright-command == '' || needs.playwright-tests.result == 'success') && (inputs.a11y-command == '' || needs.a11y-tests.result == 'success') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔄 Hent Kildekode
+        uses: actions/checkout@v5
+
+      - name: 📦 Deploy til Prod
+        uses: nais/deploy/actions/deploy@v2
+        env:
+          CLUSTER: prod-gcp
+          RESOURCE: ${{ inputs.prod-yaml-path }}${{ inputs.nais-alerts-path != '' && format(',{0}', inputs.nais-alerts-path) || '' }}
+          VAR: image=${{ needs.build.outputs.image }}
+          VARS: ${{ inputs.prod-vars-path }}
+
+      - name: 📝 Deployment Oppsummering
+        if: success()
+        uses: navikt/toi-frontend-workflows/.github/actions/deployment-success-summary@v1
+        with:
+          image: ${{ needs.build.outputs.image }}
+          branch: ${{ github.ref_name }}
+          commit: ${{ github.sha }}
+          environment: Produksjon
+
+      - name: ⚠️ Deployment Feilet
+        if: failure()
+        uses: navikt/toi-frontend-workflows/.github/actions/deployment-failure-summary@v1
+        with:
+          image: ${{ needs.build.outputs.image }}
+          branch: ${{ github.ref_name }}
+          environment: Produksjon

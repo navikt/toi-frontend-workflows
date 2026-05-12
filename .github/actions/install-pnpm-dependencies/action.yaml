@@ -1,0 +1,12 @@
+name: 'Installer pnpm-avhengigheter'
+description: 'Installerer prosjektets avhengigheter med pnpm'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installer pnpm avhengigheter
+      shell: bash
+      run: |
+        echo "::group::Installerer pnpm-pakker"
+        pnpm install --frozen-lockfile
+        echo "::endgroup::"

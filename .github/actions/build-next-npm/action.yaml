@@ -1,0 +1,12 @@
+name: 'Bygg Next.js med npm'
+description: 'Bygger Next.js applikasjon ved hjelp av npm'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Bygg Next.js
+      shell: bash
+      run: |
+        echo "::group::Bygger Next.js applikasjon"
+        npm run build
+        echo "::endgroup::"

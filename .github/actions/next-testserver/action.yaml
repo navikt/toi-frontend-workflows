@@ -1,0 +1,55 @@
+name: 'Start Next.js Testserver'
+description: 'Starter en Next.js testserver for testing formål'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Restore test workspace
+      uses: actions/cache/restore@v4
+      with:
+        path: .
+        key: test-workspace-${{ github.sha }}
+        fail-on-cache-miss: true
+
+    - name: 📥 Sett opp pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9.14.2
+
+    - name: 📦 Sett opp Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.20.0'
+        registry-url: 'https://npm.pkg.github.com'
+
+    - name: Install Playwright Chromium
+      shell: bash
+      run: pnpm exec playwright install --with-deps chromium chromium-headless-shell
+
+    - name: Sett PUPPETEER_EXECUTABLE_PATH
+      shell: bash
+      run: |
+        CHROMIUM_PATH=$(find $HOME/.cache/ms-playwright -path '*/chromium-*/chrome-linux/chrome' -o -path '*/chromium-*/chrome-linux/chromium' 2>/dev/null | head -1)
+        echo "PUPPETEER_EXECUTABLE_PATH=$CHROMIUM_PATH" >> $GITHUB_ENV
+        echo "Chromium path: $CHROMIUM_PATH"
+
+    - name: Start standalone server
+      shell: bash
+      run: |
+        cp -r public .next/standalone/
+        cp -r .next/static .next/standalone/.next/
+        PORT=1337 node .next/standalone/server.js &
+
+    - name: Vent på at serveren er klar
+      shell: bash
+      run: |
+        for i in $(seq 1 30); do
+          if curl -s http://localhost:1337 > /dev/null 2>&1; then
+            echo "Server er klar"
+            exit 0
+          fi
+          echo "Venter på server... ($i/30)"
+          sleep 2
+        done
+        echo "Server startet ikke innen 60 sekunder"
+        exit 1

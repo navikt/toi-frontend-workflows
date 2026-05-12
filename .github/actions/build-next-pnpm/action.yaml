@@ -1,0 +1,12 @@
+name: 'Bygg Next.js med pnpm'
+description: 'Bygger Next.js applikasjon ved hjelp av pnpm'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Bygg Next.js
+      shell: bash
+      run: |
+        echo "::group::Bygger Next.js applikasjon"
+        pnpm run build
+        echo "::endgroup::"

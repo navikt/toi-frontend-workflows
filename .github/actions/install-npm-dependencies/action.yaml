@@ -1,0 +1,12 @@
+name: 'Installer npm-avhengigheter'
+description: 'Installerer prosjektets avhengigheter med npm'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installer npm avhengigheter
+      shell: bash
+      run: |
+        echo "::group::Installerer NPM-pakker"
+        npm ci
+        echo "::endgroup::"
