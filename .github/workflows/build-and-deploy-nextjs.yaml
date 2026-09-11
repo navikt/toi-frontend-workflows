@@ -239,12 +239,19 @@ jobs:
       - name: 🚀 Start testserver
         uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v1
 
+      - name: 🔄 Synk snapshot-baseline mot main
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
+        shell: bash
+        run: |
+          git fetch origin main
+          git checkout origin/main -- 'tests/**/*-snapshots/**/*.png' 2>/dev/null || true
+
       - name: 🎭 Playwright
         shell: bash
         run: ${{ inputs.playwright-command }}${{ inputs.playwright-snapshots && ' -- --update-snapshots' || '' }}
 
       - name: 📸 Lagre snapshots midlertidig
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        if: ${{ inputs.playwright-snapshots && !cancelled() }}
         shell: bash
         run: |
           find tests -path '*-snapshots/*.png' -type f > /tmp/snapshot-files.txt
@@ -255,13 +262,13 @@ jobs:
           fi
 
       - name: 🔄 Hent kildekode for snapshot-commit
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        if: ${{ inputs.playwright-snapshots && !cancelled() }}
         uses: actions/checkout@v5
         with:
           ref: ${{ github.head_ref || github.ref_name }}
 
       - name: 📸 Gjenopprett snapshots
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        if: ${{ inputs.playwright-snapshots && !cancelled() }}
         shell: bash
         run: |
           if [ -f /tmp/snapshots.tar ]; then
@@ -273,7 +280,7 @@ jobs:
           fi
 
       - name: 📸 Commit oppdaterte snapshots
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        if: ${{ inputs.playwright-snapshots && !cancelled() }}
         shell: bash
         run: |
           shopt -s globstar
