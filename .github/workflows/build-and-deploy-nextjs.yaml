@@ -242,9 +242,11 @@ jobs:
       - name: 🔄 Synk snapshot-baseline mot main
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git fetch origin main
-          git checkout origin/main -- 'tests/**/*-snapshots/**/*.png' 2>/dev/null || true
+          git fetch "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" main
+          git checkout FETCH_HEAD -- 'tests/**/*-snapshots/**/*.png' 2>/dev/null || true
 
       - name: 🎭 Playwright
         shell: bash
