@@ -239,14 +239,25 @@ jobs:
       - name: 🚀 Start testserver
         uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v1
 
-      - name: 🔄 Synk snapshot-baseline mot main
+      - name: 🔄 Hent snapshot-baseline fra main
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          path: .main-baseline
+
+      - name: 📸 Synk snapshot-baseline mot main
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          git fetch "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" main
-          git checkout FETCH_HEAD -- 'tests/**/*-snapshots/**/*.png' 2>/dev/null || true
+          if [ -d .main-baseline/tests ]; then
+            find .main-baseline/tests -path '*-snapshots/*.png' -type f | while read -r f; do
+              rel="${f#.main-baseline/}"
+              mkdir -p "$(dirname "$rel")"
+              cp "$f" "$rel"
+            done
+          fi
+          rm -rf .main-baseline
 
       - name: 🎭 Playwright
         shell: bash
