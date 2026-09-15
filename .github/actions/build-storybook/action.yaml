@@ -6,10 +6,6 @@ inputs:
     description: 'Settes til true for å bruke pnpm'
     required: false
     default: 'false'
-  pnpm-version:
-    description: 'pnpm-versjon når pnpm benyttes'
-    required: false
-    default: '9.14.2'
   node-version:
     description: 'Node-versjon som skal installeres'
     required: false

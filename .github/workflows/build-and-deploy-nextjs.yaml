@@ -55,10 +55,6 @@ on:
         required: false
         type: string
         default: '22.20.0'
-      pnpm-version:
-        required: false
-        type: string
-        default: '9.14.2'
       playwright-command:
         required: false
         type: string
