@@ -103,12 +103,12 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v1
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v2
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
       - name: 🛠️ Bygg Next applikasjon
-        uses: navikt/toi-frontend-workflows/.github/actions/build-next-pnpm@v1
+        uses: navikt/toi-frontend-workflows/.github/actions/build-next-pnpm@v2
 
       - name: Cache workspace
         uses: actions/cache/save@v6
@@ -148,7 +148,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v1
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v2
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
@@ -233,7 +233,7 @@ jobs:
       id-token: write
     steps:
       - name: 🚀 Start testserver
-        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v1
+        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v2
 
       - name: 🔄 Hent snapshot-baseline fra main
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
@@ -343,7 +343,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: 🚀 Start testserver
-        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v1
+        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v2
 
       - name: ♿ Pa11y
         shell: bash
@@ -358,7 +358,7 @@ jobs:
       contents: write
     steps:
       - name: 📚 Bygg og deploy Storybook
-        uses: navikt/toi-frontend-workflows/.github/actions/build-storybook@v1
+        uses: navikt/toi-frontend-workflows/.github/actions/build-storybook@v2
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
         with:
@@ -392,7 +392,7 @@ jobs:
 
       - name: 📝 Deployment Oppsummering
         if: success()
-        uses: navikt/toi-frontend-workflows/.github/actions/deployment-success-summary@v1
+        uses: navikt/toi-frontend-workflows/.github/actions/deployment-success-summary@v2
         with:
           image: ${{ needs.build.outputs.image }}
           branch: ${{ github.ref_name }}
@@ -401,7 +401,7 @@ jobs:
 
       - name: ⚠️ Deployment Feilet
         if: failure()
-        uses: navikt/toi-frontend-workflows/.github/actions/deployment-failure-summary@v1
+        uses: navikt/toi-frontend-workflows/.github/actions/deployment-failure-summary@v2
         with:
           image: ${{ needs.build.outputs.image }}
           branch: ${{ github.ref_name }}
