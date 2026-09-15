@@ -257,7 +257,7 @@ jobs:
 
       - name: 🎭 Playwright
         shell: bash
-        run: ${{ inputs.playwright-command }}${{ inputs.playwright-snapshots && ' -- --update-snapshots' || '' }}
+        run: ${{ inputs.playwright-command }}${{ inputs.playwright-snapshots && ' --update-snapshots' || '' }}
 
       - name: 📸 Lagre snapshots midlertidig
         if: ${{ inputs.playwright-snapshots && !cancelled() }}
