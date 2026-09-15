@@ -5,17 +5,17 @@ runs:
   using: 'composite'
   steps:
     - name: Restore test workspace
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v6
       with:
         path: .
         key: test-workspace-${{ github.sha }}
         fail-on-cache-miss: true
 
     - name: 📥 Sett opp pnpm
-      uses: pnpm/action-setup@v4
+      uses: pnpm/action-setup@v6
 
     - name: 📦 Sett opp Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
         node-version: '22.20.0'
         registry-url: 'https://npm.pkg.github.com'
