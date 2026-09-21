@@ -1,0 +1,49 @@
+name: Sjekk Chainguard-image
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        required: true
+        type: string
+        description: Docker-image og tagg som skal sjekkes
+      digest-variabel:
+        required: true
+        type: string
+        description: Navn på repository-variabelen som lagrer sist bekreftede digest
+    outputs:
+      endret:
+        description: Om image-digesten er ny siden sist bekreftede bygg
+        value: ${{ jobs.sjekk.outputs.endret }}
+      digest:
+        description: Nåværende image-digest
+        value: ${{ jobs.sjekk.outputs.digest }}
+
+jobs:
+  sjekk:
+    name: Sjekk Chainguard-image
+    runs-on: ubuntu-latest
+    outputs:
+      endret: ${{ steps.sjekk.outputs.endret }}
+      digest: ${{ steps.sjekk.outputs.digest }}
+    steps:
+      - name: Sett opp Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Hent og sammenlign digest
+        id: sjekk
+        env:
+          IMAGE: ${{ inputs.image }}
+          DIGEST_VARIABEL: ${{ inputs.digest-variabel }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          digest=$(docker buildx imagetools inspect "$IMAGE" --format '{{.Digest}}')
+          forrige_digest=$(gh variable get "$DIGEST_VARIABEL" --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
+
+          test -n "$digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          if [ "$digest" = "$forrige_digest" ]; then
+            echo "endret=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "endret=true" >> "$GITHUB_OUTPUT"
+          fi

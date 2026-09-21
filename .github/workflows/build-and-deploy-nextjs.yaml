@@ -363,7 +363,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
         with:
           use-pnpm: true
-          pnpm-version: ${{ inputs.pnpm-version }}
           node-version: ${{ inputs.node-version }}
           storybook-base-path: ${{ inputs.storybook-base-path }}
           deploy-to-pages: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) }}

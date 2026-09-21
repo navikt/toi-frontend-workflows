@@ -1,0 +1,25 @@
+name: Bekreft Chainguard-digest
+
+on:
+  workflow_call:
+    inputs:
+      digest:
+        required: true
+        type: string
+        description: Image-digesten som skal bekreftes etter vellykket bygg og deploy
+      digest-variabel:
+        required: true
+        type: string
+        description: Navn på repository-variabelen som lagrer sist bekreftede digest
+
+jobs:
+  bekreft:
+    name: Bekreft Chainguard-digest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lagre bekreftet digest
+        env:
+          DIGEST: ${{ inputs.digest }}
+          DIGEST_VARIABEL: ${{ inputs.digest-variabel }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh variable set "$DIGEST_VARIABEL" --body "$DIGEST" --repo "$GITHUB_REPOSITORY"
