@@ -98,8 +98,6 @@ jobs:
 
       - name: 📥 Sett opp pnpm
         uses: pnpm/action-setup@v6
-        with:
-          version: ${{ inputs.pnpm-version }}
 
       - name: 📦 Sett opp Node.js
         uses: actions/setup-node@v5
@@ -143,8 +141,6 @@ jobs:
 
       - name: 📥 Sett opp pnpm
         uses: pnpm/action-setup@v6
-        with:
-          version: ${{ inputs.pnpm-version }}
 
       - name: 📦 Sett opp Node.js
         uses: actions/setup-node@v5
@@ -379,8 +375,6 @@ jobs:
 
       - name: 📥 Sett opp pnpm
         uses: pnpm/action-setup@v6
-        with:
-          version: ${{ inputs.pnpm-version }}
 
       - name: 📦 Sett opp Node.js
         uses: actions/setup-node@v5
