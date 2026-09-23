@@ -92,11 +92,12 @@ on:
         required: false
         type: string
         default: ''
-        description: 'Base-image for Dockerfile (ARG BASEIMAGE). Sjekkes for ny digest ved schedule; tom = ingen sjekk'
+        description: 'Base-image for Dockerfile (ARG BASEIMAGE). Sjekkes for ny digest ved schedule eller workflow_dispatch med kjor-chainguard-sjekk; tom = ingen sjekk'
 jobs:
   chainguard:
     name: 🔍 Chainguard
-    if: ${{ inputs.baseimage != '' && github.event_name == 'schedule' }}
+    # kjor-chainguard-sjekk er et workflow_dispatch-valg i appens egen workflow
+    if: ${{ inputs.baseimage != '' && (github.event_name == 'schedule' || github.event.inputs.kjor-chainguard-sjekk == 'true') }}
     uses: navikt/toi-frontend-workflows/.github/workflows/chainguard-cron.yaml@v3.1
     with:
       image: ${{ inputs.baseimage }}
@@ -105,7 +106,7 @@ jobs:
   build:
     name: 🏗️ Bygg applikasjon
     needs: [chainguard]
-    if: ${{ !cancelled() && (github.event_name != 'schedule' || inputs.baseimage == '' || needs.chainguard.outputs.endret == 'true') }}
+    if: ${{ !cancelled() && ((github.event_name != 'schedule' && github.event.inputs.kjor-chainguard-sjekk != 'true') || inputs.baseimage == '' || needs.chainguard.outputs.endret == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
@@ -150,7 +151,7 @@ jobs:
   test-build:
     name: 🧪 Bygg for testing
     needs: [chainguard]
-    if: ${{ !cancelled() && (inputs.playwright-command != '' || inputs.a11y-command != '') && (github.event_name != 'schedule' || inputs.baseimage == '' || needs.chainguard.outputs.endret == 'true') }}
+    if: ${{ !cancelled() && (inputs.playwright-command != '' || inputs.a11y-command != '') && ((github.event_name != 'schedule' && github.event.inputs.kjor-chainguard-sjekk != 'true') || inputs.baseimage == '' || needs.chainguard.outputs.endret == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
