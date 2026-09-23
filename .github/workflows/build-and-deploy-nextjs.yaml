@@ -135,6 +135,24 @@ jobs:
           path: .
           key: workspace-${{ github.sha }}
 
+      - name: � Autentiser mot GAR
+        if: ${{ inputs.baseimage != '' }}
+        uses: nais/login@v0
+        with:
+          team: ${{ inputs.nais-team }}
+
+      - name: 📌 Lås base-image til digest
+        id: baseimage
+        if: ${{ inputs.baseimage != '' }}
+        env:
+          IMAGE: ${{ inputs.baseimage }}
+        run: |
+          digest=$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest}}' | jq -r '.digest')
+          [[ "$digest" == sha256:* ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          # GitHub-variabler tillater bare A-Z, 0-9 og _
+          echo "digest-variabel=$(echo "${GITHUB_REPOSITORY#*/}" | tr 'a-z-' 'A-Z_')_DIGEST" >> "$GITHUB_OUTPUT"
+
       - name: 🐳 Last opp Docker-image til GAR
         id: docker-build-push
         uses: nais/docker-build-push@v0
@@ -142,11 +160,13 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
         with:
           team: ${{ inputs.nais-team }}
-          build_args: ${{ inputs.baseimage != '' && format('BASEIMAGE={0}', inputs.baseimage) || '' }}
+          build_args: ${{ inputs.baseimage != '' && format('BASEIMAGE={0}@{1}', inputs.baseimage, steps.baseimage.outputs.digest) || '' }}
           build_secrets: 'NODE_AUTH_TOKEN=${{ secrets.READER_TOKEN }}'
           tag: ${{ contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) && 'latest' || github.sha }}
     outputs:
       image: ${{ steps.docker-build-push.outputs.image }}
+      baseimage-digest: ${{ steps.baseimage.outputs.digest }}
+      digest-variabel: ${{ steps.baseimage.outputs.digest-variabel }}
 
   test-build:
     name: 🧪 Bygg for testing
@@ -500,9 +520,9 @@ jobs:
 
   bekreft-chainguard-digest:
     name: ✅ Chainguard
-    needs: [chainguard, deploy-til-prod]
-    if: ${{ always() && needs.chainguard.result == 'success' && needs.deploy-til-prod.result == 'success' }}
+    needs: [build, deploy-til-prod]
+    if: ${{ always() && inputs.baseimage != '' && needs.deploy-til-prod.result == 'success' && needs.build.outputs.baseimage-digest != '' }}
     uses: navikt/toi-frontend-workflows/.github/workflows/bekreft-chainguard-digest.yaml@v3.1
     with:
-      digest: ${{ needs.chainguard.outputs.digest }}
-      digest-variabel: ${{ needs.chainguard.outputs.digest-variabel }}
+      digest: ${{ needs.build.outputs.baseimage-digest }}
+      digest-variabel: ${{ needs.build.outputs.digest-variabel }}
