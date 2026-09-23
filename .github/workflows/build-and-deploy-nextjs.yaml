@@ -59,7 +59,7 @@ on:
         required: false
         type: string
         default: ''
-        description: 'Kommando for å kjøre Playwright-tester, f.eks. pnpm test'
+        description: 'Kommando for å kjøre Playwright-tester, f.eks. pnpm run test (ikke pnpm test: pnpm 12 tolker --reporter selv)'
       playwright-github-report:
         required: false
         type: boolean
@@ -163,9 +163,17 @@ jobs:
           path: .
           key: test-workspace-${{ github.sha }}
 
+      - name: 🔢 Beregn Playwright-shards
+        id: shards
+        shell: bash
+        run: echo "shards=$(seq 1 ${{ inputs.playwright-shards }} | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+    outputs:
+      shards: ${{ steps.shards.outputs.shards }}
+
   call-trivy-security-scan:
     name: 🔒 Security Scan
-    needs: build
+    needs: [build, test-build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -178,9 +186,8 @@ jobs:
 
   deploy-til-dev:
     name: 🚀 Deploy til dev-gcp
-    needs:
-      - build
-    if: contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) || github.ref == format('refs/heads/{0}', inputs.deploy-dev-branch)
+    needs: [build, test-build]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) || github.ref == format('refs/heads/{0}', inputs.deploy-dev-branch)) }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
@@ -196,9 +203,8 @@ jobs:
 
   deploy-til-dev2:
     name: 🚀 Deploy til dev2
-    needs:
-      - build
-    if: contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) || github.ref == format('refs/heads/{0}', inputs.deploy-dev2-branch)
+    needs: [build, test-build]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) || github.ref == format('refs/heads/{0}', inputs.deploy-dev2-branch)) }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
@@ -222,27 +228,16 @@ jobs:
           VAR: image=${{ needs.build.outputs.image }}
           VARS: ${{ inputs.dev2-vars-path }}
 
-  playwright-shard-list:
-    name: 🔢 Beregn Playwright-shards
-    if: ${{ inputs.playwright-command != '' }}
-    runs-on: ubuntu-latest
-    outputs:
-      shards: ${{ steps.list.outputs.shards }}
-    steps:
-      - id: list
-        shell: bash
-        run: echo "shards=$(seq 1 ${{ inputs.playwright-shards }} | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
-
   playwright-tests:
     name: 🎭 Playwright Tests ${{ inputs.playwright-shards > 1 && format('(shard {0}/{1})', matrix.shard, inputs.playwright-shards) || '' }}
     if: ${{ inputs.playwright-command != '' }}
-    needs: [test-build, playwright-shard-list]
+    needs: [test-build]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJson(needs.playwright-shard-list.outputs.shards) }}
+        shard: ${{ fromJson(needs.test-build.outputs.shards) }}
     permissions:
       contents: write
       pages: write
@@ -418,8 +413,8 @@ jobs:
 
   a11y-tests:
     name: ♿ Pa11y
-    if: ${{ inputs.a11y-command != '' }}
-    needs: [test-build]
+    needs: [build, test-build]
+    if: ${{ !cancelled() && inputs.a11y-command != '' && needs.test-build.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -432,8 +427,8 @@ jobs:
 
   storybook:
     name: 📚 Storybook
-    needs: [build]
-    if: ${{ inputs.storybook == true }}
+    needs: [build, test-build]
+    if: ${{ !cancelled() && needs.build.result == 'success' && inputs.storybook == true }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
