@@ -204,7 +204,7 @@ jobs:
   deploy-til-dev:
     name: 🚀 Deploy til dev
     needs: [build, test-build]
-    if: ${{ !cancelled() && needs.build.result == 'success' && (contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) || github.ref == format('refs/heads/{0}', inputs.deploy-dev-branch)) }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && (github.ref == format('refs/heads/{0}', inputs.deploy-dev-branch) || (inputs.deploy-to-dev-only && contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref))) }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
@@ -221,7 +221,7 @@ jobs:
   deploy-til-dev2:
     name: 🚀 Deploy til dev2
     needs: [build, test-build]
-    if: ${{ !cancelled() && needs.build.result == 'success' && (contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) || github.ref == format('refs/heads/{0}', inputs.deploy-dev2-branch)) }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.ref == format('refs/heads/{0}', inputs.deploy-dev2-branch) }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
