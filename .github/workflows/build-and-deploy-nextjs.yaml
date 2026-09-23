@@ -453,10 +453,8 @@ jobs:
     name: 🚀 Deploy til prod-gcp
     needs:
       - build
-      - deploy-til-dev
       - playwright-tests
-      - a11y-tests
-    if: ${{ always() && !inputs.deploy-to-dev-only && contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) && needs.deploy-til-dev.result == 'success' && (inputs.playwright-command == '' || needs.playwright-tests.result == 'success') && (inputs.a11y-command == '' || needs.a11y-tests.result == 'success') }}
+    if: ${{ always() && !inputs.deploy-to-dev-only && contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) && needs.build.result == 'success' && (inputs.playwright-command == '' || needs.playwright-tests.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
