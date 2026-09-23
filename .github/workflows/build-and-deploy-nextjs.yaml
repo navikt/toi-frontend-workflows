@@ -246,7 +246,7 @@ jobs:
           VARS: ${{ inputs.dev2-vars-path }}
 
   playwright-tests:
-    name: 🎭 Playwright Tests ${{ inputs.playwright-shards > 1 && format('(shard {0}/{1})', matrix.shard, inputs.playwright-shards) || '' }}
+    name: 🎭 Playwright Tests
     if: ${{ !cancelled() && inputs.playwright-command != '' && needs.test-build.result == 'success' }}
     needs: [test-build]
     runs-on: ubuntu-latest
