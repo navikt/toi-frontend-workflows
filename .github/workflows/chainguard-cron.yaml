@@ -1,4 +1,4 @@
-name: Sjekk Chainguard-image
+name: Verifiser digest
 
 on:
   workflow_call:
@@ -25,7 +25,7 @@ on:
 
 jobs:
   sjekk:
-    name: Sjekk Chainguard-image
+    name: Verifiser digest
     runs-on: ubuntu-latest
     outputs:
       endret: ${{ steps.sjekk.outputs.endret }}

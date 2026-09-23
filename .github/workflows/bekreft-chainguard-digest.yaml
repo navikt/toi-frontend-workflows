@@ -1,4 +1,4 @@
-name: Bekreft Chainguard-digest
+name: Lagre digest
 
 on:
   workflow_call:
@@ -14,7 +14,7 @@ on:
 
 jobs:
   bekreft:
-    name: Bekreft Chainguard-digest
+    name: Lagre digest
     runs-on: ubuntu-latest
     steps:
       - name: Lagre bekreftet digest
