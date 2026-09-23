@@ -47,10 +47,10 @@ jobs:
           DIGEST_VARIABEL="$(echo "${GITHUB_REPOSITORY#*/}" | tr 'a-z-' 'A-Z_')_DIGEST"
           echo "digest-variabel=$DIGEST_VARIABEL" >> "$GITHUB_OUTPUT"
 
-          digest=$(docker buildx imagetools inspect "$IMAGE" --format '{{.Digest}}')
+          digest=$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest}}' | jq -r '.digest')
           forrige_digest=$(gh variable get "$DIGEST_VARIABEL" --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
 
-          test -n "$digest"
+          [[ "$digest" == sha256:* ]]
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           if [ "$digest" = "$forrige_digest" ]; then
             echo "endret=false" >> "$GITHUB_OUTPUT"
