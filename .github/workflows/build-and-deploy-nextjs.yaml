@@ -69,6 +69,11 @@ on:
         type: boolean
         default: false
         description: 'Oppdater og commit Playwright snapshots automatisk i PR'
+      playwright-shards:
+        required: false
+        type: number
+        default: 1
+        description: 'Antall parallelle shards for Playwright-tester'
       storybook:
         required: false
         type: boolean
@@ -221,12 +226,27 @@ jobs:
           VAR: image=${{ needs.build.outputs.image }}
           VARS: ${{ inputs.dev2-vars-path }}
 
-  playwright-tests:
-    name: 🎭 Playwright Tests
+  playwright-shard-list:
+    name: 🔢 Beregn Playwright-shards
     if: ${{ inputs.playwright-command != '' }}
-    needs: [test-build]
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.list.outputs.shards }}
+    steps:
+      - id: list
+        shell: bash
+        run: echo "shards=$(seq 1 ${{ inputs.playwright-shards }} | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+
+  playwright-tests:
+    name: 🎭 Playwright Tests ${{ inputs.playwright-shards > 1 && format('(shard {0}/{1})', matrix.shard, inputs.playwright-shards) || '' }}
+    if: ${{ inputs.playwright-command != '' }}
+    needs: [test-build, playwright-shard-list]
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(needs.playwright-shard-list.outputs.shards) }}
     permissions:
       contents: write
       pages: write
@@ -257,7 +277,7 @@ jobs:
 
       - name: 🎭 Playwright
         shell: bash
-        run: ${{ inputs.playwright-command }}${{ inputs.playwright-snapshots && ' --update-snapshots' || '' }}
+        run: ${{ inputs.playwright-command }}${{ inputs.playwright-shards > 1 && format(' --shard={0}/{1}', matrix.shard, inputs.playwright-shards) || '' }}${{ inputs.playwright-github-report && ' --reporter=blob,list' || '' }}${{ inputs.playwright-snapshots && ' --update-snapshots' || '' }}
 
       - name: 📸 Lagre snapshots midlertidig
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
@@ -267,29 +287,58 @@ jobs:
           echo "Found $(wc -l < /tmp/snapshot-files.txt) snapshot files:"
           cat /tmp/snapshot-files.txt
           if [ -s /tmp/snapshot-files.txt ]; then
-            tar cf /tmp/snapshots.tar -T /tmp/snapshot-files.txt
+            tar cf /tmp/snapshots-${{ matrix.shard }}.tar -T /tmp/snapshot-files.txt
           fi
 
-      - name: 🔄 Hent kildekode for snapshot-commit
+      - name: ⬆️ Last opp snapshot-endringer
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-changes-${{ matrix.shard }}
+          path: /tmp/snapshots-${{ matrix.shard }}.tar
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - name: ⬆️ Last opp blob-report
+        if: ${{ inputs.playwright-github-report && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: blob-report/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  playwright-commit-snapshots:
+    name: 📸 Commit Playwright-snapshots
+    needs: [playwright-tests]
+    if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 🔄 Hent kildekode
         uses: actions/checkout@v5
         with:
           ref: ${{ github.head_ref || github.ref_name }}
 
+      - name: ⬇️ Last ned snapshot-endringer fra alle shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: snapshot-changes-*
+          path: /tmp/snapshot-artifacts
+          merge-multiple: true
+
       - name: 📸 Gjenopprett snapshots
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
         shell: bash
         run: |
-          if [ -f /tmp/snapshots.tar ]; then
-            tar xf /tmp/snapshots.tar
-            echo "Restored snapshot files:"
-            find tests -path '*-snapshots/*.png' -type f | head -10 || true
-          else
-            echo "No snapshots.tar found — nothing to restore"
-          fi
+          shopt -s nullglob
+          for f in /tmp/snapshot-artifacts/*.tar; do
+            echo "Gjenoppretter $f"
+            tar xf "$f"
+          done
+          find tests -path '*-snapshots/*.png' -type f | head -10 || true
 
       - name: 📸 Commit oppdaterte snapshots
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
         shell: bash
         run: |
           shopt -s globstar
@@ -314,19 +363,57 @@ jobs:
             git commit -m "oppdater playwright snapshots"
             git push
           fi
+
+  playwright-report:
+    name: 📊 Playwright Report
+    needs: [playwright-tests]
+    if: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) && !cancelled() && inputs.playwright-github-report == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    steps:
+      - name: 🔄 Hent Kildekode
+        uses: actions/checkout@v5
+
+      - name: 📥 Sett opp pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: ${{ inputs.pnpm-version }}
+
+      - name: 📦 Sett opp Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: 📥 Installer Avhengigheter
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v2
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
+
+      - name: ⬇️ Last ned blob-reports fra alle shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: blob-report-*
+          path: all-blob-reports
+          merge-multiple: true
+
+      - name: 🔀 Slå sammen rapporter
+        shell: bash
+        run: pnpm exec playwright merge-reports --reporter html ./all-blob-reports
+
       - uses: actions/upload-artifact@v4
-        if: ${{  contains(fromJSON('["refs/heads/main"]'), github.ref) && !cancelled() && inputs.playwright-github-report == true }}
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
 
       - name: Setup GitHub Pages
-        if: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) && !cancelled() && inputs.playwright-github-report == true }}
         uses: actions/configure-pages@v6
 
       - name: Deploy Playwright Report to GitHub Pages
-        if: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) && !cancelled() && inputs.playwright-github-report == true }}
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           branch: gh-pages
