@@ -88,35 +88,24 @@ on:
         type: string
         default: ''
         description: 'Kommando for å kjøre a11y-tester, f.eks. pnpm pa11y-ci'
-      chainguard-image:
+      baseimage:
         required: false
         type: string
         default: ''
-        description: 'Chainguard-base-image som sjekkes ved schedule. Tom = ingen sjekk'
-      chainguard-digest-variabel:
-        required: false
-        type: string
-        default: ''
-        description: 'Repository-variabel som lagrer sist bekreftede digest'
-      chainguard-sjekk:
-        required: false
-        type: boolean
-        default: false
-        description: 'Tving Chainguard-sjekk ved manuell kjøring'
+        description: 'Base-image for Dockerfile (ARG BASEIMAGE). Sjekkes for ny digest; tom = ingen sjekk'
 jobs:
   chainguard:
     name: 🔍 Chainguard
-    if: ${{ inputs.chainguard-image != '' && (github.event_name == 'schedule' || inputs.chainguard-sjekk) }}
-    uses: navikt/toi-frontend-workflows/.github/workflows/chainguard-cron.yaml@v3
+    if: ${{ inputs.baseimage != '' }}
+    uses: navikt/toi-frontend-workflows/.github/workflows/chainguard-cron.yaml@v3.1
     with:
-      image: ${{ inputs.chainguard-image }}
-      digest-variabel: ${{ inputs.chainguard-digest-variabel }}
+      image: ${{ inputs.baseimage }}
       nais-team: ${{ inputs.nais-team }}
 
   build:
     name: 🏗️ Bygg applikasjon
     needs: [chainguard]
-    if: ${{ !cancelled() && (github.event_name != 'schedule' || inputs.chainguard-image == '' || needs.chainguard.outputs.endret == 'true') }}
+    if: ${{ !cancelled() && (github.event_name != 'schedule' || inputs.baseimage == '' || needs.chainguard.outputs.endret == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
@@ -152,6 +141,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
         with:
           team: ${{ inputs.nais-team }}
+          build_args: ${{ inputs.baseimage != '' && format('BASEIMAGE={0}', inputs.baseimage) || '' }}
           build_secrets: 'NODE_AUTH_TOKEN=${{ secrets.READER_TOKEN }}'
           tag: ${{ contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref) && 'latest' || github.sha }}
     outputs:
@@ -160,7 +150,7 @@ jobs:
   test-build:
     name: 🧪 Bygg for testing
     needs: [chainguard]
-    if: ${{ !cancelled() && (inputs.playwright-command != '' || inputs.a11y-command != '') && (github.event_name != 'schedule' || inputs.chainguard-image == '' || needs.chainguard.outputs.endret == 'true') }}
+    if: ${{ !cancelled() && (inputs.playwright-command != '' || inputs.a11y-command != '') && (github.event_name != 'schedule' || inputs.baseimage == '' || needs.chainguard.outputs.endret == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
@@ -511,7 +501,7 @@ jobs:
     name: ✅ Chainguard
     needs: [chainguard, deploy-til-dev, deploy-til-prod]
     if: ${{ always() && needs.chainguard.result == 'success' && ((inputs.deploy-to-dev-only && needs.deploy-til-dev.result == 'success') || (!inputs.deploy-to-dev-only && needs.deploy-til-prod.result == 'success')) }}
-    uses: navikt/toi-frontend-workflows/.github/workflows/bekreft-chainguard-digest.yaml@v3
+    uses: navikt/toi-frontend-workflows/.github/workflows/bekreft-chainguard-digest.yaml@v3.1
     with:
       digest: ${{ needs.chainguard.outputs.digest }}
-      digest-variabel: ${{ inputs.chainguard-digest-variabel }}
+      digest-variabel: ${{ needs.chainguard.outputs.digest-variabel }}

@@ -7,10 +7,6 @@ on:
         required: true
         type: string
         description: Docker-image og tagg som skal sjekkes
-      digest-variabel:
-        required: true
-        type: string
-        description: Navn på repository-variabelen som lagrer sist bekreftede digest
       nais-team:
         required: false
         type: string
@@ -23,6 +19,9 @@ on:
       digest:
         description: Nåværende image-digest
         value: ${{ jobs.sjekk.outputs.digest }}
+      digest-variabel:
+        description: Repository-variabelen som lagrer sist bekreftede digest
+        value: ${{ jobs.sjekk.outputs.digest-variabel }}
 
 jobs:
   sjekk:
@@ -31,6 +30,7 @@ jobs:
     outputs:
       endret: ${{ steps.sjekk.outputs.endret }}
       digest: ${{ steps.sjekk.outputs.digest }}
+      digest-variabel: ${{ steps.sjekk.outputs.digest-variabel }}
     steps:
       - name: Autentiser mot GAR
         uses: nais/login@v0
@@ -41,9 +41,12 @@ jobs:
         id: sjekk
         env:
           IMAGE: ${{ inputs.image }}
-          DIGEST_VARIABEL: ${{ inputs.digest-variabel }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          # GitHub-variabler tillater bare A-Z, 0-9 og _
+          DIGEST_VARIABEL="$(echo "${GITHUB_REPOSITORY#*/}" | tr 'a-z-' 'A-Z_')_DIGEST"
+          echo "digest-variabel=$DIGEST_VARIABEL" >> "$GITHUB_OUTPUT"
+
           digest=$(docker buildx imagetools inspect "$IMAGE" --format '{{.Digest}}')
           forrige_digest=$(gh variable get "$DIGEST_VARIABEL" --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
 
