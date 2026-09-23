@@ -247,7 +247,7 @@ jobs:
 
   playwright-tests:
     name: 🎭 Playwright Tests ${{ inputs.playwright-shards > 1 && format('(shard {0}/{1})', matrix.shard, inputs.playwright-shards) || '' }}
-    if: ${{ inputs.playwright-command != '' }}
+    if: ${{ !cancelled() && inputs.playwright-command != '' && needs.test-build.result == 'success' }}
     needs: [test-build]
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -319,7 +319,7 @@ jobs:
   playwright-commit-snapshots:
     name: 📸 Commit Playwright-snapshots
     needs: [playwright-tests]
-    if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+    if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() && needs.playwright-tests.result != 'skipped' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -375,7 +375,7 @@ jobs:
   playwright-report:
     name: 📊 Playwright Report
     needs: [playwright-tests]
-    if: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) && !cancelled() && inputs.playwright-github-report == true }}
+    if: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) && !cancelled() && inputs.playwright-github-report == true && needs.playwright-tests.result != 'skipped' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
