@@ -92,11 +92,11 @@ on:
         required: false
         type: string
         default: ''
-        description: 'Base-image for Dockerfile (ARG BASEIMAGE). Sjekkes for ny digest; tom = ingen sjekk'
+        description: 'Base-image for Dockerfile (ARG BASEIMAGE). Sjekkes for ny digest ved schedule; tom = ingen sjekk'
 jobs:
   chainguard:
     name: 🔍 Chainguard
-    if: ${{ inputs.baseimage != '' }}
+    if: ${{ inputs.baseimage != '' && github.event_name == 'schedule' }}
     uses: navikt/toi-frontend-workflows/.github/workflows/chainguard-cron.yaml@v3.1
     with:
       image: ${{ inputs.baseimage }}
@@ -499,8 +499,8 @@ jobs:
 
   bekreft-chainguard-digest:
     name: ✅ Chainguard
-    needs: [chainguard, deploy-til-dev, deploy-til-prod]
-    if: ${{ always() && needs.chainguard.result == 'success' && ((inputs.deploy-to-dev-only && needs.deploy-til-dev.result == 'success') || (!inputs.deploy-to-dev-only && needs.deploy-til-prod.result == 'success')) }}
+    needs: [chainguard, deploy-til-prod]
+    if: ${{ always() && needs.chainguard.result == 'success' && needs.deploy-til-prod.result == 'success' }}
     uses: navikt/toi-frontend-workflows/.github/workflows/bekreft-chainguard-digest.yaml@v3.1
     with:
       digest: ${{ needs.chainguard.outputs.digest }}
