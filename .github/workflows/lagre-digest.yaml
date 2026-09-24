@@ -1,0 +1,27 @@
+name: Lagre digest
+
+on:
+  workflow_call:
+    inputs:
+      digest:
+        required: true
+        type: string
+        description: Base-image-digesten som ble brukt i bygget som er deployet til prod
+
+jobs:
+  lagre:
+    name: Lagre digest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skriv digest til fil
+        env:
+          DIGEST: ${{ inputs.digest }}
+        run: printf '%s' "$DIGEST" > digest.txt
+
+      # GITHUB_TOKEN kan ikke skrive repo-variabler, så digesten lagres som artifact
+      - name: Last opp digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseimage-digest
+          path: digest.txt
+          retention-days: 90
