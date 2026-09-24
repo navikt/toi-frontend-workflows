@@ -7,19 +7,21 @@ on:
         required: true
         type: string
         description: Image-digesten som skal bekreftes etter vellykket bygg og deploy
-      digest-variabel:
-        required: true
-        type: string
-        description: Navn på repository-variabelen som lagrer sist bekreftede digest
 
 jobs:
   bekreft:
     name: Lagre digest
     runs-on: ubuntu-latest
     steps:
-      - name: Lagre bekreftet digest
+      - name: Skriv digest til fil
         env:
           DIGEST: ${{ inputs.digest }}
-          DIGEST_VARIABEL: ${{ inputs.digest-variabel }}
-          GH_TOKEN: ${{ github.token }}
-        run: gh variable set "$DIGEST_VARIABEL" --body "$DIGEST" --repo "$GITHUB_REPOSITORY"
+        run: printf '%s' "$DIGEST" > digest.txt
+
+      # GITHUB_TOKEN kan ikke skrive repo-variabler, så digesten lagres som artifact
+      - name: Last opp digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseimage-digest
+          path: digest.txt
+          retention-days: 90

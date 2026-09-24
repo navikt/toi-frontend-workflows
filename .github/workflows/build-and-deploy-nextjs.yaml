@@ -150,8 +150,6 @@ jobs:
           digest=$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest}}' | jq -r '.digest')
           [[ "$digest" == sha256:* ]]
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          # GitHub-variabler tillater bare A-Z, 0-9 og _
-          echo "digest-variabel=$(echo "${GITHUB_REPOSITORY#*/}" | tr 'a-z-' 'A-Z_')_DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: 🐳 Last opp Docker-image til GAR
         id: docker-build-push
@@ -166,7 +164,6 @@ jobs:
     outputs:
       image: ${{ steps.docker-build-push.outputs.image }}
       baseimage-digest: ${{ steps.baseimage.outputs.digest }}
-      digest-variabel: ${{ steps.baseimage.outputs.digest-variabel }}
 
   test-build:
     name: 🧪 Bygg for testing
@@ -525,4 +522,3 @@ jobs:
     uses: navikt/toi-frontend-workflows/.github/workflows/bekreft-chainguard-digest.yaml@v3.1
     with:
       digest: ${{ needs.build.outputs.baseimage-digest }}
-      digest-variabel: ${{ needs.build.outputs.digest-variabel }}
