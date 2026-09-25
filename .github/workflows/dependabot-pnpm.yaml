@@ -1,0 +1,43 @@
+name: Oppdater pnpm-lockfile for Dependabot
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        required: false
+        type: string
+        default: '24'
+        description: 'Node-versjon som brukes når repoet mangler .nvmrc'
+
+jobs:
+  lockfile:
+    name: Oppdater pnpm-lockfile
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔄 Hent Dependabot-branchen
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: 📥 Sett opp pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: 📦 Sett opp Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ${{ hashFiles('.nvmrc') != '' && '.nvmrc' || '' }}
+          node-version: ${{ hashFiles('.nvmrc') == '' && inputs.node-version || '' }}
+          registry-url: 'https://npm.pkg.github.com'
+
+      # Dependabot sin pnpm-støtte henger ofte etter, så lockfilen genereres på nytt med prosjektets pnpm
+      - name: 🔒 Oppdater lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
+        run: pnpm install --lockfile-only
+
+      - name: 💾 Commit lockfile
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: 'chore: oppdater pnpm-lockfile'
+          file_pattern: pnpm-lock.yaml
