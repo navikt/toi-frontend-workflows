@@ -12,7 +12,8 @@ on:
 jobs:
   lockfile:
     name: Oppdater pnpm-lockfile
-    if: ${{ github.actor == 'dependabot[bot]' }}
+    # Både utløser og PR-forfatter må være Dependabot, så jobben aldri committer på andres PR-er
+    if: ${{ github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Dependabot-branchen
