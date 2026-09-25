@@ -92,21 +92,10 @@ on:
         required: false
         type: string
         default: ''
-        description: 'Base-image for Dockerfile (ARG BASEIMAGE). Sjekkes for ny digest ved schedule eller workflow_dispatch med kjor-chainguard-sjekk; tom = ingen sjekk'
+        description: 'Base-image for Dockerfile (ARG BASEIMAGE). Bygget låses til nåværende digest, som lagres etter prod-deploy for sjekk-base-image.yaml'
 jobs:
-  verifiser-digest:
-    name: 🔍 Base-image
-    # kjor-chainguard-sjekk er et workflow_dispatch-valg i appens egen workflow
-    if: ${{ inputs.baseimage != '' && (github.event_name == 'schedule' || github.event.inputs.kjor-chainguard-sjekk == 'true') }}
-    uses: navikt/toi-frontend-workflows/.github/workflows/verifiser-digest.yaml@v3.1
-    with:
-      image: ${{ inputs.baseimage }}
-      nais-team: ${{ inputs.nais-team }}
-
   build:
     name: 🏗️ Bygg applikasjon
-    needs: [verifiser-digest]
-    if: ${{ !cancelled() && ((github.event_name != 'schedule' && github.event.inputs.kjor-chainguard-sjekk != 'true') || inputs.baseimage == '' || needs.verifiser-digest.outputs.endret == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
@@ -167,8 +156,7 @@ jobs:
 
   test-build:
     name: 🧪 Bygg for testing
-    needs: [verifiser-digest]
-    if: ${{ !cancelled() && (inputs.playwright-command != '' || inputs.a11y-command != '') && ((github.event_name != 'schedule' && github.event.inputs.kjor-chainguard-sjekk != 'true') || inputs.baseimage == '' || needs.verifiser-digest.outputs.endret == 'true') }}
+    if: ${{ inputs.playwright-command != '' || inputs.a11y-command != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
@@ -265,7 +253,7 @@ jobs:
 
   playwright-tests:
     name: 🎭 Playwright Tests
-    if: ${{ !cancelled() && inputs.playwright-command != '' && needs.test-build.result == 'success' }}
+    if: ${{ inputs.playwright-command != '' }}
     needs: [test-build]
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -518,8 +506,9 @@ jobs:
   lagre-digest:
     name: 💾 Base-image
     needs: [build, deploy-til-prod]
-    # !cancelled() trengs: implisitt success() er usann når verifiser-digest er hoppet over
+    # !cancelled() trengs: implisitt success() er usann når test-build/playwright-tests er hoppet over (apper uten tester)
     if: ${{ !cancelled() && needs.deploy-til-prod.result == 'success' && needs.build.outputs.baseimage-digest != '' }}
-    uses: navikt/toi-frontend-workflows/.github/workflows/lagre-digest.yaml@v3.1
+    uses: navikt/toi-frontend-workflows/.github/workflows/lagre-digest.yaml@v3.2
     with:
+      image: ${{ inputs.baseimage }}
       digest: ${{ needs.build.outputs.baseimage-digest }}
