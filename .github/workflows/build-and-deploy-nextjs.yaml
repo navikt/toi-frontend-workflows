@@ -210,7 +210,7 @@ jobs:
   deploy-til-dev:
     name: 🚀 Deploy til dev
     needs: [build, test-build]
-    if: ${{ !cancelled() && needs.build.result == 'success' && (github.ref == format('refs/heads/{0}', inputs.deploy-dev-branch) || (inputs.deploy-to-dev-only && contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref))) }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && (github.ref == format('refs/heads/{0}', inputs.deploy-dev-branch) || contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref)) }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
@@ -227,16 +227,18 @@ jobs:
   deploy-til-dev2:
     name: 🚀 Deploy til dev2
     needs: [build, test-build]
-    if: ${{ !cancelled() && needs.build.result == 'success' && github.ref == format('refs/heads/{0}', inputs.deploy-dev2-branch) }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && (github.ref == format('refs/heads/{0}', inputs.deploy-dev2-branch) || contains(fromJSON('["refs/heads/master", "refs/heads/main"]'), github.ref)) }}
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
         uses: actions/checkout@v5
 
-      - name: 📂 Sjekk om dev2-gcp.json finnes
+      - name: 📂 Sjekk om dev2-konfigurasjon finnes
         id: check-dev2-file
+        env:
+          DEV2_VARS_PATH: ${{ inputs.dev2-vars-path || '.nais/dev2-gcp.json' }}
         run: |
-          if [ -f ".nais/dev2-gcp.json" ]; then
+          if [ -f "$DEV2_VARS_PATH" ]; then
             echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "exists=false" >> $GITHUB_OUTPUT
