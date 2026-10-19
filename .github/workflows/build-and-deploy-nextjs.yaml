@@ -87,7 +87,7 @@ on:
         required: false
         type: string
         default: ''
-        description: 'Kommando for å kjøre a11y-tester, f.eks. pnpm pa11y-ci'
+        description: 'Kommando for tilgjengelighetstester (axe i Playwright), f.eks. pnpm run test:a11y. Kjøres i egen jobb som ikke stopper deploy'
       baseimage:
         required: false
         type: string
@@ -457,7 +457,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   a11y-tests:
-    name: ♿ Pa11y
+    name: ♿ Tilgjengelighet
     needs: [build, test-build]
     if: ${{ !cancelled() && inputs.a11y-command != '' && needs.test-build.result == 'success' }}
     runs-on: ubuntu-latest
@@ -466,9 +466,18 @@ jobs:
       - name: 🚀 Start testserver
         uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v2
 
-      - name: ♿ Pa11y
+      - name: ♿ Tilgjengelighetstester (WCAG 2.1 A/AA)
         shell: bash
         run: ${{ inputs.a11y-command }}
+
+      - name: ⬆️ Last opp tilgjengelighetsrapport
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tilgjengelighetsrapport
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
 
   storybook:
     name: 📚 Storybook

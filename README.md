@@ -18,7 +18,6 @@ Backend-relaterte workflows ligger i [navikt/toi-github-actions-workflows](https
     build-storybook/
     next-testserver/
     run-playwright-tests/
-    run-pa11y/
     deployment-success-summary/
     deployment-failure-summary/
 ```

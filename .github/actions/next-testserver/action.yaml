@@ -24,13 +24,6 @@ runs:
       shell: bash
       run: pnpm exec playwright install --with-deps chromium chromium-headless-shell
 
-    - name: Sett PUPPETEER_EXECUTABLE_PATH
-      shell: bash
-      run: |
-        CHROMIUM_PATH=$(find $HOME/.cache/ms-playwright -path '*/chromium-*/chrome-linux/chrome' -o -path '*/chromium-*/chrome-linux/chromium' 2>/dev/null | head -1)
-        echo "PUPPETEER_EXECUTABLE_PATH=$CHROMIUM_PATH" >> $GITHUB_ENV
-        echo "Chromium path: $CHROMIUM_PATH"
-
     - name: Start standalone server
       shell: bash
       run: |
