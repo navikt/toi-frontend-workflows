@@ -213,20 +213,6 @@ jobs:
     outputs:
       shards: ${{ steps.shards.outputs.shards }}
 
-  call-trivy-security-scan:
-    name: 🔒 Security Scan
-    needs: [build, test-build]
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      security-events: write
-    steps:
-      - name: Kjør Trivy scan
-        uses: navikt/toi-github-actions-workflows/.github/actions/trivy-scan@v12
-        with:
-          image: ${{ needs.build.outputs.image }}
-
   deploy-til-dev:
     name: 🚀 Deploy til dev
     needs: [build, test-build]
