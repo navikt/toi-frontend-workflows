@@ -438,7 +438,8 @@ jobs:
         with:
           branch: gh-pages
           folder: playwright-report
-          clean: false
+          clean: true
+          single-commit: true
           target-folder: playwright-report
           token: ${{ secrets.GITHUB_TOKEN }}
 
