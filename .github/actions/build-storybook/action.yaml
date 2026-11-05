@@ -89,6 +89,7 @@ runs:
       with:
         branch: ${{ inputs['pages-branch'] }}
         folder: ${{ inputs['output-dir'] }}
-        clean: false
+        clean: true
+        single-commit: true
         target-folder: ${{ inputs['pages-target-folder'] }}
         token: ${{ inputs['github-token'] }}
