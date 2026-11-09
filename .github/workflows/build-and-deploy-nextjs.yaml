@@ -188,6 +188,25 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
+      # Playwright-imaget må ha nøyaktig samme versjon som appen har låst
+      - name: 🎭 Finn Playwright-versjon
+        id: playwright
+        shell: bash
+        run: |
+          versjon=$(node -p "require('@playwright/test/package.json').version")
+          if [[ ! "$versjon" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Fant ikke stabil versjon av @playwright/test i appen (fikk '$versjon'). Prerelease-versjoner støttes ikke"
+            exit 1
+          fi
+          # Imagene har zstd fra 1.64.0. Uten zstd finner ikke cache-restore workspace lagret på hosten
+          minste=1.64.0
+          if [[ "$(printf '%s\n' "$minste" "$versjon" | sort -V | head -n1)" != "$minste" ]]; then
+            echo "::error::@playwright/test $versjon er for gammel. Testene kjører i Playwright-imaget, som krever minst $minste"
+            exit 1
+          fi
+          echo "Playwright $versjon"
+          echo "versjon=$versjon" >> "$GITHUB_OUTPUT"
+
       - name: 🛠️ Bygg for test
         shell: bash
         run: pnpm test-build
@@ -202,25 +221,6 @@ jobs:
         id: shards
         shell: bash
         run: echo "shards=$(seq 1 ${{ inputs.playwright-shards }} | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
-
-      # Playwright-imaget må ha nøyaktig samme versjon som appen har låst
-      - name: 🎭 Finn Playwright-versjon
-        id: playwright
-        shell: bash
-        run: |
-          versjon=$(node -p "require('@playwright/test/package.json').version")
-          if [[ ! "$versjon" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Fant ikke gyldig versjon av @playwright/test i appen (fikk '$versjon')"
-            exit 1
-          fi
-          # Imagene har zstd fra 1.64.0. Uten zstd finner ikke cache-restore workspace lagret på hosten
-          minste=1.64.0
-          if [[ "$(printf '%s\n' "$minste" "${versjon%%-*}" | sort -V | head -n1)" != "$minste" ]]; then
-            echo "::error::@playwright/test $versjon er for gammel. Testene kjører i Playwright-imaget, som krever minst $minste"
-            exit 1
-          fi
-          echo "Playwright $versjon"
-          echo "versjon=$versjon" >> "$GITHUB_OUTPUT"
     outputs:
       shards: ${{ steps.shards.outputs.shards }}
       playwright-version: ${{ steps.playwright.outputs.versjon }}
