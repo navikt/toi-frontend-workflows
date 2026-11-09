@@ -31,7 +31,8 @@ runs:
       run: |
         cp -r public .next/standalone/
         cp -r .next/static .next/standalone/.next/
-        PORT=1337 node .next/standalone/server.js &
+        # Docker setter HOSTNAME til container-ID, og standalone-serveren ville lyttet bare på den
+        HOSTNAME=0.0.0.0 PORT=1337 node .next/standalone/server.js &
 
     - name: Vent på at serveren er klar
       shell: bash

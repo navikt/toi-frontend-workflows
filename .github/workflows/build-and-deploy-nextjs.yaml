@@ -280,9 +280,6 @@ jobs:
       image: mcr.microsoft.com/playwright:v${{ needs.test-build.outputs.playwright-version }}-noble
       # Chromium trenger mer delt minne enn Dockers standard
       options: --shm-size=1gb
-    env:
-      # Firefox krever at HOME eies av brukeren, og containeren kjører som root
-      HOME: /root
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -321,6 +318,9 @@ jobs:
       - name: 🎭 Playwright
         shell: bash
         run: ${{ inputs.playwright-command }}${{ inputs.playwright-shards > 1 && format(' --shard={0}/{1}', matrix.shard, inputs.playwright-shards) || '' }}${{ inputs.playwright-github-report && ' --reporter=blob,list' || '' }}${{ inputs.playwright-snapshots && ' --update-snapshots' || '' }}
+        env:
+          # Firefox krever at HOME eies av brukeren, og containeren kjører som root
+          HOME: /root
 
       - name: 📸 Lagre snapshots midlertidig
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
@@ -473,9 +473,6 @@ jobs:
       image: mcr.microsoft.com/playwright:v${{ needs.test-build.outputs.playwright-version }}-noble
       # Chromium trenger mer delt minne enn Dockers standard
       options: --shm-size=1gb
-    env:
-      # Firefox krever at HOME eies av brukeren, og containeren kjører som root
-      HOME: /root
     timeout-minutes: 30
     steps:
       - name: 🚀 Start testserver
@@ -486,6 +483,9 @@ jobs:
       - name: ♿ Tilgjengelighetstester (WCAG 2.1 A/AA)
         shell: bash
         run: ${{ inputs.a11y-command }}
+        env:
+          # Firefox krever at HOME eies av brukeren, og containeren kjører som root
+          HOME: /root
 
       - name: ⬆️ Last opp tilgjengelighetsrapport
         if: ${{ !cancelled() }}
