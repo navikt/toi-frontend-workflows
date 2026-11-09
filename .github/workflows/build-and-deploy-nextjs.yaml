@@ -232,7 +232,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: 📦 Deploy til Dev
-        uses: nais/deploy/actions/deploy@v3
+        uses: nais/deploy/actions/deploy@6a9dcd6df697ec2d38edc78cadb0b9acd1232f50 # v3
         env:
           CLUSTER: dev-gcp
           RESOURCE: ${{ inputs.dev-yaml-path }}
@@ -261,7 +261,7 @@ jobs:
 
       - name: 📦 Deploy til dev2
         if: steps.check-dev2-file.outputs.exists == 'true'
-        uses: nais/deploy/actions/deploy@v3
+        uses: nais/deploy/actions/deploy@6a9dcd6df697ec2d38edc78cadb0b9acd1232f50 # v3
         env:
           CLUSTER: dev-gcp
           RESOURCE: ${{ inputs.dev2-yaml-path }}
@@ -419,7 +419,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: 📦 Deploy til Prod
-        uses: nais/deploy/actions/deploy@v3
+        uses: nais/deploy/actions/deploy@6a9dcd6df697ec2d38edc78cadb0b9acd1232f50 # v3
         env:
           CLUSTER: prod-gcp
           RESOURCE: ${{ inputs.prod-yaml-path }}${{ inputs.nais-alerts-path != '' && format(',{0}', inputs.nais-alerts-path) || '' }}
