@@ -280,6 +280,10 @@ jobs:
       image: mcr.microsoft.com/playwright:v${{ needs.test-build.outputs.playwright-version }}-noble
       # Chromium trenger mer delt minne enn Dockers standard
       options: --shm-size=1gb
+    env:
+      # Workspace er test-build sin verifiserte installasjon. Uten dette reinstallerer pnpm fordi stien er ny i containeren,
+      # og supply-chain-sjekken feiler mot GitHub Packages uten token
+      pnpm_config_verify_deps_before_run: 'false'
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -473,6 +477,10 @@ jobs:
       image: mcr.microsoft.com/playwright:v${{ needs.test-build.outputs.playwright-version }}-noble
       # Chromium trenger mer delt minne enn Dockers standard
       options: --shm-size=1gb
+    env:
+      # Workspace er test-build sin verifiserte installasjon. Uten dette reinstallerer pnpm fordi stien er ny i containeren,
+      # og supply-chain-sjekken feiler mot GitHub Packages uten token
+      pnpm_config_verify_deps_before_run: 'false'
     timeout-minutes: 30
     steps:
       - name: 🚀 Start testserver
