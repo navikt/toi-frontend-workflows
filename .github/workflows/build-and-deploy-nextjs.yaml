@@ -208,9 +208,15 @@ jobs:
         id: playwright
         shell: bash
         run: |
-          versjon=$(pnpm exec playwright --version | awk '{print $2}')
+          versjon=$(node -p "require('@playwright/test/package.json').version")
           if [[ ! "$versjon" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Fant ikke gyldig Playwright-versjon i appen (fikk '$versjon')"
+            echo "::error::Fant ikke gyldig versjon av @playwright/test i appen (fikk '$versjon')"
+            exit 1
+          fi
+          # Imagene har zstd fra 1.64.0. Uten zstd finner ikke cache-restore workspace lagret på hosten
+          minste=1.64.0
+          if [[ "$(printf '%s\n' "$minste" "${versjon%%-*}" | sort -V | head -n1)" != "$minste" ]]; then
+            echo "::error::@playwright/test $versjon er for gammel. Testene kjører i Playwright-imaget, som krever minst $minste"
             exit 1
           fi
           echo "Playwright $versjon"
@@ -272,6 +278,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v${{ needs.test-build.outputs.playwright-version }}-noble
+      # Chromium trenger mer delt minne enn Dockers standard
+      options: --shm-size=1gb
     env:
       # Firefox krever at HOME eies av brukeren, og containeren kjører som root
       HOME: /root
@@ -463,6 +471,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v${{ needs.test-build.outputs.playwright-version }}-noble
+      # Chromium trenger mer delt minne enn Dockers standard
+      options: --shm-size=1gb
     env:
       # Firefox krever at HOME eies av brukeren, og containeren kjører som root
       HOME: /root
