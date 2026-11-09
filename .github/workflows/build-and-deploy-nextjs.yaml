@@ -54,7 +54,8 @@ on:
       node-version:
         required: false
         type: string
-        default: '22.20.0'
+        default: '26.13.0'
+        description: 'Node-versjon for bygg, testserver, Playwright-rapport og Storybook i CI. Påvirker ikke Node-versjonen i Docker-imaget'
       playwright-command:
         required: false
         type: string
@@ -116,7 +117,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v4
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
@@ -128,7 +129,7 @@ jobs:
         run: echo "CDN_ASSET_PREFIX=https://cdn.nav.no/$TEAM/$APP" >> "$GITHUB_ENV"
 
       - name: 🛠️ Bygg Next applikasjon
-        uses: navikt/toi-frontend-workflows/.github/actions/build-next-pnpm@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/build-next-pnpm@v4
 
       - name: ☁️ Last opp statiske filer til CDN
         if: ${{ inputs.cdn-upload }}
@@ -192,7 +193,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v4
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
@@ -275,7 +276,9 @@ jobs:
       id-token: write
     steps:
       - name: 🚀 Start testserver
-        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v4
+        with:
+          node-version: ${{ inputs.node-version }}
 
       - name: 🔄 Hent snapshot-baseline fra main
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
@@ -409,7 +412,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v4
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
@@ -451,7 +454,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: 🚀 Start testserver
-        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v4
+        with:
+          node-version: ${{ inputs.node-version }}
 
       - name: ♿ Tilgjengelighetstester (WCAG 2.1 A/AA)
         shell: bash
@@ -475,7 +480,7 @@ jobs:
       contents: write
     steps:
       - name: 📚 Bygg og deploy Storybook
-        uses: navikt/toi-frontend-workflows/.github/actions/build-storybook@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/build-storybook@v4
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
         with:
@@ -506,7 +511,7 @@ jobs:
 
       - name: 📝 Deployment Oppsummering
         if: success()
-        uses: navikt/toi-frontend-workflows/.github/actions/deployment-success-summary@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/deployment-success-summary@v4
         with:
           image: ${{ needs.build.outputs.image }}
           branch: ${{ github.ref_name }}
@@ -515,7 +520,7 @@ jobs:
 
       - name: ⚠️ Deployment Feilet
         if: failure()
-        uses: navikt/toi-frontend-workflows/.github/actions/deployment-failure-summary@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/deployment-failure-summary@v4
         with:
           image: ${{ needs.build.outputs.image }}
           branch: ${{ github.ref_name }}
@@ -526,7 +531,7 @@ jobs:
     needs: [build, deploy-til-prod]
     # !cancelled() trengs: implisitt success() er usann når test-build/playwright-tests er hoppet over (apper uten tester)
     if: ${{ !cancelled() && needs.deploy-til-prod.result == 'success' && needs.build.outputs.baseimage-digest != '' }}
-    uses: navikt/toi-frontend-workflows/.github/workflows/lagre-digest.yaml@v3.2
+    uses: navikt/toi-frontend-workflows/.github/workflows/lagre-digest.yaml@v4
     with:
       image: ${{ inputs.baseimage }}
       digest: ${{ needs.build.outputs.baseimage-digest }}

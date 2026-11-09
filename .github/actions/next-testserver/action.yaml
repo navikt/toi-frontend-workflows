@@ -1,6 +1,12 @@
 name: 'Start Next.js Testserver'
 description: 'Starter en Next.js testserver for testing formål'
 
+inputs:
+  node-version:
+    description: 'Node-versjon som skal installeres. Bør være den samme som ble brukt i test-bygget'
+    required: false
+    default: '26.13.0'
+
 runs:
   using: 'composite'
   steps:
@@ -17,7 +23,7 @@ runs:
     - name: 📦 Sett opp Node.js
       uses: actions/setup-node@v5
       with:
-        node-version: '22.20.0'
+        node-version: ${{ inputs.node-version }}
         registry-url: 'https://npm.pkg.github.com'
 
     - name: Install Playwright Chromium

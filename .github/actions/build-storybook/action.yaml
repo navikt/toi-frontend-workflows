@@ -9,7 +9,7 @@ inputs:
   node-version:
     description: 'Node-versjon som skal installeres'
     required: false
-    default: '22.20.0'
+    default: '26.13.0'
   registry-url:
     description: 'NPM registry som skal brukes'
     required: false
