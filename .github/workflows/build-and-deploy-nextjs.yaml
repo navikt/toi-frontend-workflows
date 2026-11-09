@@ -202,8 +202,22 @@ jobs:
         id: shards
         shell: bash
         run: echo "shards=$(seq 1 ${{ inputs.playwright-shards }} | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+
+      # Playwright-imaget må ha nøyaktig samme versjon som appen har låst
+      - name: 🎭 Finn Playwright-versjon
+        id: playwright
+        shell: bash
+        run: |
+          versjon=$(pnpm exec playwright --version | awk '{print $2}')
+          if [[ ! "$versjon" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Fant ikke gyldig Playwright-versjon i appen (fikk '$versjon')"
+            exit 1
+          fi
+          echo "Playwright $versjon"
+          echo "versjon=$versjon" >> "$GITHUB_OUTPUT"
     outputs:
       shards: ${{ steps.shards.outputs.shards }}
+      playwright-version: ${{ steps.playwright.outputs.versjon }}
 
   deploy-til-dev:
     name: 🚀 Deploy til dev
@@ -256,6 +270,11 @@ jobs:
     if: ${{ inputs.playwright-command != '' }}
     needs: [test-build]
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.test-build.outputs.playwright-version }}-noble
+    env:
+      # Firefox krever at HOME eies av brukeren, og containeren kjører som root
+      HOME: /root
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -442,6 +461,11 @@ jobs:
     needs: [build, test-build]
     if: ${{ !cancelled() && inputs.a11y-command != '' && needs.test-build.result == 'success' }}
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.test-build.outputs.playwright-version }}-noble
+    env:
+      # Firefox krever at HOME eies av brukeren, og containeren kjører som root
+      HOME: /root
     timeout-minutes: 30
     steps:
       - name: 🚀 Start testserver

@@ -1,5 +1,5 @@
 name: 'Start Next.js Testserver'
-description: 'Starter en Next.js testserver for testing formål'
+description: 'Starter en Next.js testserver for testing formål. Må kjøre i Playwright-containeren, som har nettleserne'
 
 inputs:
   node-version:
@@ -25,10 +25,6 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         registry-url: 'https://npm.pkg.github.com'
-
-    - name: Install Playwright Chromium
-      shell: bash
-      run: pnpm exec playwright install --with-deps chromium chromium-headless-shell
 
     - name: Start standalone server
       shell: bash
