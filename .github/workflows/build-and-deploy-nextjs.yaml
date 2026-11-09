@@ -352,6 +352,7 @@ jobs:
           HOME: /root
 
       - name: 📸 Lagre snapshots midlertidig
+        id: snapshot-save
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() && steps.snapshot-sync.outcome == 'success' }}
         shell: bash
         run: |
@@ -363,17 +364,39 @@ jobs:
           comm -13 /tmp/snapshots-for.txt /tmp/snapshots-etter.txt | cut -d' ' -f3- > /tmp/snapshot-files.txt
           echo "Found $(wc -l < /tmp/snapshot-files.txt) changed snapshot files:"
           cat /tmp/snapshot-files.txt
-          if [ -s /tmp/snapshot-files.txt ]; then
-            tar cf /tmp/snapshots-${{ matrix.shard }}.tar -T /tmp/snapshot-files.txt
+          # Lages også uten endringer, slik at et omkjørt shard erstatter resultatet fra forrige forsøk
+          tar cf /tmp/snapshots.tar -T /tmp/snapshot-files.txt
+
+      # Publiseres alltid, også når baseline-synk eller lagring feilet, slik at commit-jobben ikke bruker et eldre forsøk
+      - name: 📸 Skriv snapshot-resultat
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+          ATTEMPT: ${{ github.run_attempt }}
+          BASELINE: ${{ needs.test-build.outputs.snapshot-baseline-sha }}
+          CACHE_KEY: ${{ needs.test-build.outputs.cache-key }}
+          LAGRET: ${{ steps.snapshot-save.outcome }}
+        run: |
+          rm -rf /tmp/snapshot-resultat
+          mkdir -p /tmp/snapshot-resultat
+          status=ugyldig
+          if [ "$LAGRET" = success ] && [ -f /tmp/snapshots.tar ]; then
+            status=ok
+            mv /tmp/snapshots.tar /tmp/snapshot-resultat/snapshots.tar
           fi
+          printf 'status=%s\nshard=%s\nattempt=%s\nbaseline=%s\ncache-key=%s\n' \
+            "$status" "$SHARD" "$ATTEMPT" "$BASELINE" "$CACHE_KEY" > /tmp/snapshot-resultat/resultat.txt
+          cat /tmp/snapshot-resultat/resultat.txt
 
       - name: ⬆️ Last opp snapshot-endringer
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() && steps.snapshot-sync.outcome == 'success' }}
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: snapshot-changes-${{ matrix.shard }}
-          path: /tmp/snapshots-${{ matrix.shard }}.tar
-          if-no-files-found: ignore
+          # Unikt per forsøk. download-artifact velger ellers nyeste artefakt per navn, også fra tidligere forsøk
+          name: snapshot-changes-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: /tmp/snapshot-resultat/
+          if-no-files-found: error
           retention-days: 1
 
       - name: ⬆️ Last opp blob-report
@@ -421,15 +444,41 @@ jobs:
         with:
           pattern: snapshot-changes-*
           path: /tmp/snapshot-artifacts
-          merge-multiple: true
 
+      # Bruker bare nyeste forsøk per shard. Er det ugyldig eller fra en annen baseline/test-build, hoppes sharden over
       - name: 📸 Gjenopprett snapshots
         shell: bash
+        env:
+          BASELINE: ${{ needs.test-build.outputs.snapshot-baseline-sha }}
+          CACHE_KEY: ${{ needs.test-build.outputs.cache-key }}
         run: |
           shopt -s nullglob
-          for f in /tmp/snapshot-artifacts/*.tar; do
-            echo "Gjenoppretter $f"
-            tar xf "$f"
+          verdi() { sed -n "s/^$1=//p" "$2" | head -n1; }
+          : > /tmp/snapshot-forsok.txt
+          for d in /tmp/snapshot-artifacts/snapshot-changes-*/; do
+            meta="${d}resultat.txt"
+            if [ ! -f "$meta" ]; then
+              echo "::warning::Mangler resultat.txt i $d"
+              continue
+            fi
+            shard=$(verdi shard "$meta")
+            attempt=$(verdi attempt "$meta")
+            if [[ ! "$shard" =~ ^[0-9]+$ || ! "$attempt" =~ ^[0-9]+$ ]]; then
+              echo "::warning::Ugyldig shard/forsøk i $meta"
+              continue
+            fi
+            echo "$shard $attempt $d" >> /tmp/snapshot-forsok.txt
+          done
+          sort -k1,1n -k2,2nr /tmp/snapshot-forsok.txt | awk '!sett[$1]++' | while read -r shard attempt d; do
+            meta="${d}resultat.txt"
+            if [ "$(verdi status "$meta")" != ok ]; then
+              echo "::warning::Shard $shard (forsøk $attempt) har ikke gyldige snapshots. Hopper over"
+            elif [ "$(verdi baseline "$meta")" != "$BASELINE" ] || [ "$(verdi cache-key "$meta")" != "$CACHE_KEY" ]; then
+              echo "::warning::Shard $shard (forsøk $attempt) er fra en annen baseline eller test-build. Hopper over"
+            else
+              echo "Gjenoppretter shard $shard fra forsøk $attempt"
+              tar xf "${d}snapshots.tar"
+            fi
           done
           find tests -path '*-snapshots/*.png' -type f | head -10 || true
 
