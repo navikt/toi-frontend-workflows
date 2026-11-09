@@ -6,6 +6,10 @@ inputs:
     description: 'Node-versjon som skal installeres. Bør være den samme som ble brukt i test-bygget'
     required: false
     default: '26.13.0'
+  cache-key:
+    description: 'Nøkkelen test-workspace ble lagret med. Standard er test-workspace-<sha>'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -14,7 +18,7 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: .
-        key: test-workspace-${{ github.sha }}
+        key: ${{ inputs.cache-key || format('test-workspace-{0}', github.sha) }}
         fail-on-cache-miss: true
 
     - name: 📥 Sett opp pnpm

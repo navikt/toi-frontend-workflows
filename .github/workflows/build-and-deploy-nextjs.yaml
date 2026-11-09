@@ -215,7 +215,22 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: .
-          key: test-workspace-${{ github.sha }}
+          # Unik per kjøring, slik at testjobbene alltid får workspace fra denne test-builden
+          key: test-workspace-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # Samme main-revisjon brukes som snapshot-baseline i alle shards og i commit-jobben
+      - name: 📸 Finn snapshot-baseline
+        id: snapshot-baseline
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
+        shell: bash
+        run: |
+          sha=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Fant ikke main i repoet (fikk '$sha')"
+            exit 1
+          fi
+          echo "Snapshot-baseline: main@$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: 🔢 Beregn Playwright-shards
         id: shards
@@ -224,6 +239,8 @@ jobs:
     outputs:
       shards: ${{ steps.shards.outputs.shards }}
       playwright-version: ${{ steps.playwright.outputs.versjon }}
+      cache-key: test-workspace-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      snapshot-baseline-sha: ${{ steps.snapshot-baseline.outputs.sha }}
 
   deploy-til-dev:
     name: 🚀 Deploy til dev
@@ -298,15 +315,17 @@ jobs:
         uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@pilot-node-26
         with:
           node-version: ${{ inputs.node-version }}
+          cache-key: ${{ needs.test-build.outputs.cache-key }}
 
       - name: 🔄 Hent snapshot-baseline fra main
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
         uses: actions/checkout@v7
         with:
-          ref: main
+          ref: ${{ needs.test-build.outputs.snapshot-baseline-sha }}
           path: .main-baseline
 
       - name: 📸 Synk snapshot-baseline mot main
+        id: snapshot-sync
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
         shell: bash
         run: |
@@ -318,7 +337,9 @@ jobs:
             done
           fi
           rm -rf .main-baseline
-          # Hver shard skal bare sende bilder den selv har endret, ellers overskriver shardene hverandre
+          # Hver shard skal bare sende bilder den selv har endret, ellers overskriver shardene hverandre.
+          # Commit-jobben synker samme baseline, så uendrede baseline-bilder trenger ikke sendes
+          : > /tmp/snapshots-for.txt
           if [ -d tests ]; then
             find tests -path '*-snapshots/*.png' -type f -exec sha256sum {} + | sort > /tmp/snapshots-for.txt
           fi
@@ -331,10 +352,10 @@ jobs:
           HOME: /root
 
       - name: 📸 Lagre snapshots midlertidig
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() && steps.snapshot-sync.outcome == 'success' }}
         shell: bash
         run: |
-          touch /tmp/snapshots-for.txt /tmp/snapshots-etter.txt
+          : > /tmp/snapshots-etter.txt
           if [ -d tests ]; then
             find tests -path '*-snapshots/*.png' -type f -exec sha256sum {} + | sort > /tmp/snapshots-etter.txt
           fi
@@ -347,7 +368,7 @@ jobs:
           fi
 
       - name: ⬆️ Last opp snapshot-endringer
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
+        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() && steps.snapshot-sync.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: snapshot-changes-${{ matrix.shard }}
@@ -366,7 +387,7 @@ jobs:
 
   playwright-commit-snapshots:
     name: 📸 Commit Playwright-snapshots
-    needs: [playwright-tests]
+    needs: [test-build, playwright-tests]
     if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() && needs.playwright-tests.result != 'skipped' }}
     runs-on: ubuntu-latest
     permissions:
@@ -376,6 +397,24 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: 🔄 Hent snapshot-baseline fra main
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.test-build.outputs.snapshot-baseline-sha }}
+          path: .main-baseline
+
+      - name: 📸 Synk snapshot-baseline mot main
+        shell: bash
+        run: |
+          if [ -d .main-baseline/tests ]; then
+            find .main-baseline/tests -path '*-snapshots/*.png' -type f | while read -r f; do
+              rel="${f#.main-baseline/}"
+              mkdir -p "$(dirname "$rel")"
+              cp "$f" "$rel"
+            done
+          fi
+          rm -rf .main-baseline
 
       - name: ⬇️ Last ned snapshot-endringer fra alle shards
         uses: actions/download-artifact@v8
@@ -496,6 +535,7 @@ jobs:
         uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@pilot-node-26
         with:
           node-version: ${{ inputs.node-version }}
+          cache-key: ${{ needs.test-build.outputs.cache-key }}
 
       - name: ♿ Tilgjengelighetstester (WCAG 2.1 A/AA)
         shell: bash
