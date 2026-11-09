@@ -15,7 +15,6 @@ Backend-relaterte workflows ligger i [navikt/toi-github-actions-workflows](https
     install-npm-dependencies/
     build-next-pnpm/
     build-next-npm/
-    build-storybook/
     next-testserver/
     run-playwright-tests/
     deployment-success-summary/
