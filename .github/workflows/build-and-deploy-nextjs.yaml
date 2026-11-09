@@ -318,6 +318,10 @@ jobs:
             done
           fi
           rm -rf .main-baseline
+          # Hver shard skal bare sende bilder den selv har endret, ellers overskriver shardene hverandre
+          if [ -d tests ]; then
+            find tests -path '*-snapshots/*.png' -type f -exec sha256sum {} + | sort > /tmp/snapshots-for.txt
+          fi
 
       - name: 🎭 Playwright
         shell: bash
@@ -330,8 +334,13 @@ jobs:
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
         shell: bash
         run: |
-          find tests -path '*-snapshots/*.png' -type f > /tmp/snapshot-files.txt
-          echo "Found $(wc -l < /tmp/snapshot-files.txt) snapshot files:"
+          touch /tmp/snapshots-for.txt /tmp/snapshots-etter.txt
+          if [ -d tests ]; then
+            find tests -path '*-snapshots/*.png' -type f -exec sha256sum {} + | sort > /tmp/snapshots-etter.txt
+          fi
+          # Nye eller endrede bilder. sha256sum skriver «<hash>  <sti>»
+          comm -13 /tmp/snapshots-for.txt /tmp/snapshots-etter.txt | cut -d' ' -f3- > /tmp/snapshot-files.txt
+          echo "Found $(wc -l < /tmp/snapshot-files.txt) changed snapshot files:"
           cat /tmp/snapshot-files.txt
           if [ -s /tmp/snapshot-files.txt ]; then
             tar cf /tmp/snapshots-${{ matrix.shard }}.tar -T /tmp/snapshot-files.txt
