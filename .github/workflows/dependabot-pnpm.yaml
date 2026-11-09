@@ -6,7 +6,7 @@ on:
       node-version:
         required: false
         type: string
-        default: '24'
+        default: '26.13.0'
         description: 'Node-versjon som brukes når repoet mangler .nvmrc'
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
         uses: pnpm/action-setup@v6
 
       - name: 📦 Sett opp Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: ${{ hashFiles('.nvmrc') != '' && '.nvmrc' || '' }}
           node-version: ${{ hashFiles('.nvmrc') == '' && inputs.node-version || '' }}

@@ -1,5 +1,15 @@
 name: 'Start Next.js Testserver'
-description: 'Starter en Next.js testserver for testing formål'
+description: 'Starter en Next.js testserver for testing formål. Må kjøre i Playwright-containeren, som har nettleserne'
+
+inputs:
+  node-version:
+    description: 'Node-versjon som skal installeres. Bør være den samme som ble brukt i test-bygget'
+    required: false
+    default: '26.13.0'
+  cache-key:
+    description: 'Nøkkelen test-workspace ble lagret med. Standard er test-workspace-<sha>'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -8,28 +18,25 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: .
-        key: test-workspace-${{ github.sha }}
+        key: ${{ inputs.cache-key || format('test-workspace-{0}', github.sha) }}
         fail-on-cache-miss: true
 
     - name: 📥 Sett opp pnpm
       uses: pnpm/action-setup@v6
 
     - name: 📦 Sett opp Node.js
-      uses: actions/setup-node@v5
+      uses: actions/setup-node@v7
       with:
-        node-version: '22.20.0'
+        node-version: ${{ inputs.node-version }}
         registry-url: 'https://npm.pkg.github.com'
-
-    - name: Install Playwright Chromium
-      shell: bash
-      run: pnpm exec playwright install --with-deps chromium chromium-headless-shell
 
     - name: Start standalone server
       shell: bash
       run: |
         cp -r public .next/standalone/
         cp -r .next/static .next/standalone/.next/
-        PORT=1337 node .next/standalone/server.js &
+        # Docker setter HOSTNAME til container-ID, og standalone-serveren ville lyttet bare på den
+        HOSTNAME=0.0.0.0 PORT=1337 node .next/standalone/server.js &
 
     - name: Vent på at serveren er klar
       shell: bash

@@ -54,7 +54,8 @@ on:
       node-version:
         required: false
         type: string
-        default: '22.20.0'
+        default: '26.13.0'
+        description: 'Node-versjon for bygg, testserver og Playwright-rapport i CI. Påvirker ikke Node-versjonen i Docker-imaget'
       playwright-command:
         required: false
         type: string
@@ -64,25 +65,11 @@ on:
         required: false
         type: boolean
         default: false
-      playwright-snapshots:
-        required: false
-        type: boolean
-        default: false
-        description: 'Oppdater og commit Playwright snapshots automatisk i PR'
       playwright-shards:
         required: false
         type: number
         default: 1
         description: 'Antall parallelle shards for Playwright-tester'
-      storybook:
-        required: false
-        type: boolean
-        default: false
-      storybook-base-path:
-        required: false
-        type: string
-        default: ''
-        description: 'Base path for Storybook (f.eks. /min-app/storybook/)'
       a11y-command:
         required: false
         type: string
@@ -104,19 +91,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📥 Sett opp pnpm
         uses: pnpm/action-setup@v6
 
       - name: 📦 Sett opp Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.node-version }}
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v4
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
@@ -128,7 +115,7 @@ jobs:
         run: echo "CDN_ASSET_PREFIX=https://cdn.nav.no/$TEAM/$APP" >> "$GITHUB_ENV"
 
       - name: 🛠️ Bygg Next applikasjon
-        uses: navikt/toi-frontend-workflows/.github/actions/build-next-pnpm@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/build-next-pnpm@v4
 
       - name: ☁️ Last opp statiske filer til CDN
         if: ${{ inputs.cdn-upload }}
@@ -180,21 +167,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📥 Sett opp pnpm
         uses: pnpm/action-setup@v6
 
       - name: 📦 Sett opp Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.node-version }}
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v4
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
+
+      # Playwright-imaget må ha nøyaktig samme versjon som appen har låst
+      - name: 🎭 Finn Playwright-versjon
+        id: playwright
+        shell: bash
+        run: |
+          versjon=$(node -p "require('@playwright/test/package.json').version")
+          if [[ ! "$versjon" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Fant ikke stabil versjon av @playwright/test i appen (fikk '$versjon'). Prerelease-versjoner støttes ikke"
+            exit 1
+          fi
+          # Imagene har zstd fra 1.64.0. Uten zstd finner ikke cache-restore workspace lagret på hosten
+          minste=1.64.0
+          if [[ "$(printf '%s\n' "$minste" "$versjon" | sort -V | head -n1)" != "$minste" ]]; then
+            echo "::error::@playwright/test $versjon er for gammel. Testene kjører i Playwright-imaget, som krever minst $minste"
+            exit 1
+          fi
+          echo "Playwright $versjon"
+          echo "versjon=$versjon" >> "$GITHUB_OUTPUT"
 
       - name: 🛠️ Bygg for test
         shell: bash
@@ -204,7 +210,8 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: .
-          key: test-workspace-${{ github.sha }}
+          # Unik per kjøring, slik at testjobbene alltid får workspace fra denne test-builden
+          key: test-workspace-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: 🔢 Beregn Playwright-shards
         id: shards
@@ -212,6 +219,8 @@ jobs:
         run: echo "shards=$(seq 1 ${{ inputs.playwright-shards }} | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
     outputs:
       shards: ${{ steps.shards.outputs.shards }}
+      playwright-version: ${{ steps.playwright.outputs.versjon }}
+      cache-key: test-workspace-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   deploy-til-dev:
     name: 🚀 Deploy til dev
@@ -220,10 +229,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📦 Deploy til Dev
-        uses: nais/deploy/actions/deploy@v2
+        uses: nais/deploy/actions/deploy@6a9dcd6df697ec2d38edc78cadb0b9acd1232f50 # v3
         env:
           CLUSTER: dev-gcp
           RESOURCE: ${{ inputs.dev-yaml-path }}
@@ -237,7 +246,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📂 Sjekk om dev2-konfigurasjon finnes
         id: check-dev2-file
@@ -252,7 +261,7 @@ jobs:
 
       - name: 📦 Deploy til dev2
         if: steps.check-dev2-file.outputs.exists == 'true'
-        uses: nais/deploy/actions/deploy@v2
+        uses: nais/deploy/actions/deploy@6a9dcd6df697ec2d38edc78cadb0b9acd1232f50 # v3
         env:
           CLUSTER: dev-gcp
           RESOURCE: ${{ inputs.dev2-yaml-path }}
@@ -264,127 +273,45 @@ jobs:
     if: ${{ inputs.playwright-command != '' }}
     needs: [test-build]
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.test-build.outputs.playwright-version }}-noble
+      # Chromium trenger mer delt minne enn Dockers standard
+      options: --shm-size=1gb
+    env:
+      # Workspace er test-build sin verifiserte installasjon. Uten dette reinstallerer pnpm fordi stien er ny i containeren,
+      # og supply-chain-sjekken feiler mot GitHub Packages uten token
+      pnpm_config_verify_deps_before_run: 'false'
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         shard: ${{ fromJson(needs.test-build.outputs.shards) }}
     permissions:
-      contents: write
+      contents: read
       pages: write
       id-token: write
     steps:
       - name: 🚀 Start testserver
-        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v2
-
-      - name: 🔄 Hent snapshot-baseline fra main
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
-        uses: actions/checkout@v5
+        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v4
         with:
-          ref: main
-          path: .main-baseline
-
-      - name: 📸 Synk snapshot-baseline mot main
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
-        shell: bash
-        run: |
-          if [ -d .main-baseline/tests ]; then
-            find .main-baseline/tests -path '*-snapshots/*.png' -type f | while read -r f; do
-              rel="${f#.main-baseline/}"
-              mkdir -p "$(dirname "$rel")"
-              cp "$f" "$rel"
-            done
-          fi
-          rm -rf .main-baseline
+          node-version: ${{ inputs.node-version }}
+          cache-key: ${{ needs.test-build.outputs.cache-key }}
 
       - name: 🎭 Playwright
         shell: bash
-        run: ${{ inputs.playwright-command }}${{ inputs.playwright-shards > 1 && format(' --shard={0}/{1}', matrix.shard, inputs.playwright-shards) || '' }}${{ inputs.playwright-github-report && ' --reporter=blob,list' || '' }}${{ inputs.playwright-snapshots && ' --update-snapshots' || '' }}
-
-      - name: 📸 Lagre snapshots midlertidig
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
-        shell: bash
-        run: |
-          find tests -path '*-snapshots/*.png' -type f > /tmp/snapshot-files.txt
-          echo "Found $(wc -l < /tmp/snapshot-files.txt) snapshot files:"
-          cat /tmp/snapshot-files.txt
-          if [ -s /tmp/snapshot-files.txt ]; then
-            tar cf /tmp/snapshots-${{ matrix.shard }}.tar -T /tmp/snapshot-files.txt
-          fi
-
-      - name: ⬆️ Last opp snapshot-endringer
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: snapshot-changes-${{ matrix.shard }}
-          path: /tmp/snapshots-${{ matrix.shard }}.tar
-          if-no-files-found: ignore
-          retention-days: 1
+        run: ${{ inputs.playwright-command }}${{ inputs.playwright-shards > 1 && format(' --shard={0}/{1}', matrix.shard, inputs.playwright-shards) || '' }}${{ inputs.playwright-github-report && ' --reporter=blob,list' || '' }}
+        env:
+          # Firefox krever at HOME eies av brukeren, og containeren kjører som root
+          HOME: /root
 
       - name: ⬆️ Last opp blob-report
         if: ${{ inputs.playwright-github-report && !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: blob-report-${{ matrix.shard }}
           path: blob-report/
           if-no-files-found: ignore
           retention-days: 1
-
-  playwright-commit-snapshots:
-    name: 📸 Commit Playwright-snapshots
-    needs: [playwright-tests]
-    if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() && needs.playwright-tests.result != 'skipped' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: 🔄 Hent kildekode
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
-
-      - name: ⬇️ Last ned snapshot-endringer fra alle shards
-        uses: actions/download-artifact@v4
-        with:
-          pattern: snapshot-changes-*
-          path: /tmp/snapshot-artifacts
-          merge-multiple: true
-
-      - name: 📸 Gjenopprett snapshots
-        shell: bash
-        run: |
-          shopt -s nullglob
-          for f in /tmp/snapshot-artifacts/*.tar; do
-            echo "Gjenoppretter $f"
-            tar xf "$f"
-          done
-          find tests -path '*-snapshots/*.png' -type f | head -10 || true
-
-      - name: 📸 Commit oppdaterte snapshots
-        shell: bash
-        run: |
-          shopt -s globstar
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add tests/**/*-snapshots/**/*.png
-
-          for file in $(git diff --cached --name-only -- '*.png'); do
-            if git cat-file -e HEAD:"$file" 2>/dev/null; then
-              git show HEAD:"$file" > /tmp/old_snapshot.png
-              PIXELS=$(compare -metric AE /tmp/old_snapshot.png "$file" null: 2>&1 || true)
-              if [ "$PIXELS" = "0" ]; then
-                echo "Ingen visuell endring: $file"
-                git checkout HEAD -- "$file"
-              fi
-            fi
-          done
-
-          if git diff --cached --quiet; then
-            echo "No snapshot changes to commit"
-          else
-            git commit -m "oppdater playwright snapshots"
-            git push
-          fi
 
   playwright-report:
     name: 📊 Playwright Report
@@ -397,24 +324,24 @@ jobs:
       id-token: write
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📥 Sett opp pnpm
         uses: pnpm/action-setup@v6
 
       - name: 📦 Sett opp Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.node-version }}
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v4
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
       - name: ⬇️ Last ned blob-reports fra alle shards
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: blob-report-*
           path: all-blob-reports
@@ -424,7 +351,7 @@ jobs:
         shell: bash
         run: pnpm exec playwright merge-reports --reporter html ./all-blob-reports
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/
@@ -448,42 +375,37 @@ jobs:
     needs: [build, test-build]
     if: ${{ !cancelled() && inputs.a11y-command != '' && needs.test-build.result == 'success' }}
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.test-build.outputs.playwright-version }}-noble
+      # Chromium trenger mer delt minne enn Dockers standard
+      options: --shm-size=1gb
+    env:
+      # Workspace er test-build sin verifiserte installasjon. Uten dette reinstallerer pnpm fordi stien er ny i containeren,
+      # og supply-chain-sjekken feiler mot GitHub Packages uten token
+      pnpm_config_verify_deps_before_run: 'false'
     timeout-minutes: 30
     steps:
       - name: 🚀 Start testserver
-        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache-key: ${{ needs.test-build.outputs.cache-key }}
 
       - name: ♿ Tilgjengelighetstester (WCAG 2.1 A/AA)
         shell: bash
         run: ${{ inputs.a11y-command }}
+        env:
+          # Firefox krever at HOME eies av brukeren, og containeren kjører som root
+          HOME: /root
 
       - name: ⬆️ Last opp tilgjengelighetsrapport
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tilgjengelighetsrapport
           path: playwright-report/
           if-no-files-found: ignore
           retention-days: 14
-
-  storybook:
-    name: 📚 Storybook
-    needs: [build, test-build]
-    if: ${{ !cancelled() && needs.build.result == 'success' && inputs.storybook == true }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: 📚 Bygg og deploy Storybook
-        uses: navikt/toi-frontend-workflows/.github/actions/build-storybook@v2
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
-        with:
-          use-pnpm: true
-          node-version: ${{ inputs.node-version }}
-          storybook-base-path: ${{ inputs.storybook-base-path }}
-          deploy-to-pages: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-til-prod:
     name: 🚀 Deploy til produksjon
@@ -494,10 +416,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📦 Deploy til Prod
-        uses: nais/deploy/actions/deploy@v2
+        uses: nais/deploy/actions/deploy@6a9dcd6df697ec2d38edc78cadb0b9acd1232f50 # v3
         env:
           CLUSTER: prod-gcp
           RESOURCE: ${{ inputs.prod-yaml-path }}${{ inputs.nais-alerts-path != '' && format(',{0}', inputs.nais-alerts-path) || '' }}
@@ -506,7 +428,7 @@ jobs:
 
       - name: 📝 Deployment Oppsummering
         if: success()
-        uses: navikt/toi-frontend-workflows/.github/actions/deployment-success-summary@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/deployment-success-summary@v4
         with:
           image: ${{ needs.build.outputs.image }}
           branch: ${{ github.ref_name }}
@@ -515,7 +437,7 @@ jobs:
 
       - name: ⚠️ Deployment Feilet
         if: failure()
-        uses: navikt/toi-frontend-workflows/.github/actions/deployment-failure-summary@v2
+        uses: navikt/toi-frontend-workflows/.github/actions/deployment-failure-summary@v4
         with:
           image: ${{ needs.build.outputs.image }}
           branch: ${{ github.ref_name }}
@@ -526,7 +448,7 @@ jobs:
     needs: [build, deploy-til-prod]
     # !cancelled() trengs: implisitt success() er usann når test-build/playwright-tests er hoppet over (apper uten tester)
     if: ${{ !cancelled() && needs.deploy-til-prod.result == 'success' && needs.build.outputs.baseimage-digest != '' }}
-    uses: navikt/toi-frontend-workflows/.github/workflows/lagre-digest.yaml@v3.2
+    uses: navikt/toi-frontend-workflows/.github/workflows/lagre-digest.yaml@v4
     with:
       image: ${{ inputs.baseimage }}
       digest: ${{ needs.build.outputs.baseimage-digest }}
