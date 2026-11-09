@@ -96,13 +96,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📥 Sett opp pnpm
         uses: pnpm/action-setup@v6
 
       - name: 📦 Sett opp Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.node-version }}
           registry-url: 'https://npm.pkg.github.com'
@@ -172,13 +172,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📥 Sett opp pnpm
         uses: pnpm/action-setup@v6
 
       - name: 📦 Sett opp Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.node-version }}
           registry-url: 'https://npm.pkg.github.com'
@@ -212,10 +212,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📦 Deploy til Dev
-        uses: nais/deploy/actions/deploy@v2
+        uses: nais/deploy/actions/deploy@v3
         env:
           CLUSTER: dev-gcp
           RESOURCE: ${{ inputs.dev-yaml-path }}
@@ -229,7 +229,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📂 Sjekk om dev2-konfigurasjon finnes
         id: check-dev2-file
@@ -244,7 +244,7 @@ jobs:
 
       - name: 📦 Deploy til dev2
         if: steps.check-dev2-file.outputs.exists == 'true'
-        uses: nais/deploy/actions/deploy@v2
+        uses: nais/deploy/actions/deploy@v3
         env:
           CLUSTER: dev-gcp
           RESOURCE: ${{ inputs.dev2-yaml-path }}
@@ -273,7 +273,7 @@ jobs:
 
       - name: 🔄 Hent snapshot-baseline fra main
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: main
           path: .main-baseline
@@ -308,7 +308,7 @@ jobs:
 
       - name: ⬆️ Last opp snapshot-endringer
         if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: snapshot-changes-${{ matrix.shard }}
           path: /tmp/snapshots-${{ matrix.shard }}.tar
@@ -317,7 +317,7 @@ jobs:
 
       - name: ⬆️ Last opp blob-report
         if: ${{ inputs.playwright-github-report && !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: blob-report-${{ matrix.shard }}
           path: blob-report/
@@ -333,12 +333,12 @@ jobs:
       contents: write
     steps:
       - name: 🔄 Hent kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref || github.ref_name }}
 
       - name: ⬇️ Last ned snapshot-endringer fra alle shards
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: snapshot-changes-*
           path: /tmp/snapshot-artifacts
@@ -391,13 +391,13 @@ jobs:
       id-token: write
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📥 Sett opp pnpm
         uses: pnpm/action-setup@v6
 
       - name: 📦 Sett opp Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.node-version }}
           registry-url: 'https://npm.pkg.github.com'
@@ -408,7 +408,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
       - name: ⬇️ Last ned blob-reports fra alle shards
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: blob-report-*
           path: all-blob-reports
@@ -418,7 +418,7 @@ jobs:
         shell: bash
         run: pnpm exec playwright merge-reports --reporter html ./all-blob-reports
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/
@@ -455,7 +455,7 @@ jobs:
 
       - name: ⬆️ Last opp tilgjengelighetsrapport
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tilgjengelighetsrapport
           path: playwright-report/
@@ -471,10 +471,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Hent Kildekode
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 📦 Deploy til Prod
-        uses: nais/deploy/actions/deploy@v2
+        uses: nais/deploy/actions/deploy@v3
         env:
           CLUSTER: prod-gcp
           RESOURCE: ${{ inputs.prod-yaml-path }}${{ inputs.nais-alerts-path != '' && format(',{0}', inputs.nais-alerts-path) || '' }}
