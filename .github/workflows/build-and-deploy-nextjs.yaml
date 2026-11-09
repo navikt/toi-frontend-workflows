@@ -108,7 +108,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v4
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@pilot-node-26
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
@@ -120,7 +120,7 @@ jobs:
         run: echo "CDN_ASSET_PREFIX=https://cdn.nav.no/$TEAM/$APP" >> "$GITHUB_ENV"
 
       - name: 🛠️ Bygg Next applikasjon
-        uses: navikt/toi-frontend-workflows/.github/actions/build-next-pnpm@v4
+        uses: navikt/toi-frontend-workflows/.github/actions/build-next-pnpm@pilot-node-26
 
       - name: ☁️ Last opp statiske filer til CDN
         if: ${{ inputs.cdn-upload }}
@@ -184,7 +184,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v4
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@pilot-node-26
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
@@ -294,7 +294,7 @@ jobs:
       id-token: write
     steps:
       - name: 🚀 Start testserver
-        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v4
+        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@pilot-node-26
         with:
           node-version: ${{ inputs.node-version }}
 
@@ -430,7 +430,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
 
       - name: 📥 Installer Avhengigheter
-        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@v4
+        uses: navikt/toi-frontend-workflows/.github/actions/install-pnpm-dependencies@pilot-node-26
         env:
           NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
 
@@ -479,7 +479,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: 🚀 Start testserver
-        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@v4
+        uses: navikt/toi-frontend-workflows/.github/actions/next-testserver@pilot-node-26
         with:
           node-version: ${{ inputs.node-version }}
 
@@ -517,7 +517,7 @@ jobs:
 
       - name: 📝 Deployment Oppsummering
         if: success()
-        uses: navikt/toi-frontend-workflows/.github/actions/deployment-success-summary@v4
+        uses: navikt/toi-frontend-workflows/.github/actions/deployment-success-summary@pilot-node-26
         with:
           image: ${{ needs.build.outputs.image }}
           branch: ${{ github.ref_name }}
@@ -526,7 +526,7 @@ jobs:
 
       - name: ⚠️ Deployment Feilet
         if: failure()
-        uses: navikt/toi-frontend-workflows/.github/actions/deployment-failure-summary@v4
+        uses: navikt/toi-frontend-workflows/.github/actions/deployment-failure-summary@pilot-node-26
         with:
           image: ${{ needs.build.outputs.image }}
           branch: ${{ github.ref_name }}
@@ -537,7 +537,7 @@ jobs:
     needs: [build, deploy-til-prod]
     # !cancelled() trengs: implisitt success() er usann når test-build/playwright-tests er hoppet over (apper uten tester)
     if: ${{ !cancelled() && needs.deploy-til-prod.result == 'success' && needs.build.outputs.baseimage-digest != '' }}
-    uses: navikt/toi-frontend-workflows/.github/workflows/lagre-digest.yaml@v4
+    uses: navikt/toi-frontend-workflows/.github/workflows/lagre-digest.yaml@pilot-node-26
     with:
       image: ${{ inputs.baseimage }}
       digest: ${{ needs.build.outputs.baseimage-digest }}
