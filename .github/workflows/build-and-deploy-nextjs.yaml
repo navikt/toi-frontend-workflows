@@ -55,7 +55,7 @@ on:
         required: false
         type: string
         default: '26.13.0'
-        description: 'Node-versjon for bygg, testserver, Playwright-rapport og Storybook i CI. Påvirker ikke Node-versjonen i Docker-imaget'
+        description: 'Node-versjon for bygg, testserver og Playwright-rapport i CI. Påvirker ikke Node-versjonen i Docker-imaget'
       playwright-command:
         required: false
         type: string
@@ -75,15 +75,6 @@ on:
         type: number
         default: 1
         description: 'Antall parallelle shards for Playwright-tester'
-      storybook:
-        required: false
-        type: boolean
-        default: false
-      storybook-base-path:
-        required: false
-        type: string
-        default: ''
-        description: 'Base path for Storybook (f.eks. /min-app/storybook/)'
       a11y-command:
         required: false
         type: string
@@ -470,25 +461,6 @@ jobs:
           path: playwright-report/
           if-no-files-found: ignore
           retention-days: 14
-
-  storybook:
-    name: 📚 Storybook
-    needs: [build, test-build]
-    if: ${{ !cancelled() && needs.build.result == 'success' && inputs.storybook == true }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: 📚 Bygg og deploy Storybook
-        uses: navikt/toi-frontend-workflows/.github/actions/build-storybook@v4
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.READER_TOKEN }}
-        with:
-          use-pnpm: true
-          node-version: ${{ inputs.node-version }}
-          storybook-base-path: ${{ inputs.storybook-base-path }}
-          deploy-to-pages: ${{ contains(fromJSON('["refs/heads/main"]'), github.ref) }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-til-prod:
     name: 🚀 Deploy til produksjon
