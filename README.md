@@ -21,6 +21,16 @@ Backend-relaterte workflows ligger i [navikt/toi-github-actions-workflows](https
     deployment-failure-summary/
 ```
 
+## Playwright-tester
+
+`build-and-deploy-nextjs` kjører `playwright-command` i Playwright-containeren, eventuelt fordelt på `playwright-shards`.
+Med `playwright-github-report: true` laster hver shard opp en blob-rapport. På `main` slår workflowen rapportene
+sammen til én HTML-rapport, laster den opp som artifact og publiserer den på GitHub Pages.
+
+Workflowen oppdaterer ikke snapshots. Fra `v4` er inputen `playwright-snapshots` fjernet, sammen med automatisk
+oppdatering og bot-commit av bildesnapshots. Apper som fortsatt sender inputen, feiler. ARIA-snapshots kjøres som
+vanlige tester mot filene som ligger i repoet. Oppdater dem lokalt og commit dem sammen med endringen.
+
 ## Versjonering
 
 **Én tag på top-nivå styrer alt.** Workflow-filene refererer sine egne interne actions

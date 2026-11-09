@@ -65,11 +65,6 @@ on:
         required: false
         type: boolean
         default: false
-      playwright-snapshots:
-        required: false
-        type: boolean
-        default: false
-        description: 'Oppdater og commit Playwright snapshots automatisk i PR'
       playwright-shards:
         required: false
         type: number
@@ -218,20 +213,6 @@ jobs:
           # Unik per kjøring, slik at testjobbene alltid får workspace fra denne test-builden
           key: test-workspace-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
-      # Samme main-revisjon brukes som snapshot-baseline i alle shards og i commit-jobben
-      - name: 📸 Finn snapshot-baseline
-        id: snapshot-baseline
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
-        shell: bash
-        run: |
-          sha=$(git ls-remote origin refs/heads/main | cut -f1)
-          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Fant ikke main i repoet (fikk '$sha')"
-            exit 1
-          fi
-          echo "Snapshot-baseline: main@$sha"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-
       - name: 🔢 Beregn Playwright-shards
         id: shards
         shell: bash
@@ -240,7 +221,6 @@ jobs:
       shards: ${{ steps.shards.outputs.shards }}
       playwright-version: ${{ steps.playwright.outputs.versjon }}
       cache-key: test-workspace-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-      snapshot-baseline-sha: ${{ steps.snapshot-baseline.outputs.sha }}
 
   deploy-til-dev:
     name: 🚀 Deploy til dev
@@ -307,7 +287,7 @@ jobs:
       matrix:
         shard: ${{ fromJson(needs.test-build.outputs.shards) }}
     permissions:
-      contents: write
+      contents: read
       pages: write
       id-token: write
     steps:
@@ -317,87 +297,12 @@ jobs:
           node-version: ${{ inputs.node-version }}
           cache-key: ${{ needs.test-build.outputs.cache-key }}
 
-      - name: 🔄 Hent snapshot-baseline fra main
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.test-build.outputs.snapshot-baseline-sha }}
-          path: .main-baseline
-
-      - name: 📸 Synk snapshot-baseline mot main
-        id: snapshot-sync
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' }}
-        shell: bash
-        run: |
-          if [ -d .main-baseline/tests ]; then
-            find .main-baseline/tests -path '*-snapshots/*.png' -type f | while read -r f; do
-              rel="${f#.main-baseline/}"
-              mkdir -p "$(dirname "$rel")"
-              cp "$f" "$rel"
-            done
-          fi
-          rm -rf .main-baseline
-          # Hver shard skal bare sende bilder den selv har endret, ellers overskriver shardene hverandre.
-          # Commit-jobben synker samme baseline, så uendrede baseline-bilder trenger ikke sendes
-          : > /tmp/snapshots-for.txt
-          if [ -d tests ]; then
-            find tests -path '*-snapshots/*.png' -type f -exec sha256sum {} + | sort > /tmp/snapshots-for.txt
-          fi
-
       - name: 🎭 Playwright
         shell: bash
-        run: ${{ inputs.playwright-command }}${{ inputs.playwright-shards > 1 && format(' --shard={0}/{1}', matrix.shard, inputs.playwright-shards) || '' }}${{ inputs.playwright-github-report && ' --reporter=blob,list' || '' }}${{ inputs.playwright-snapshots && ' --update-snapshots' || '' }}
+        run: ${{ inputs.playwright-command }}${{ inputs.playwright-shards > 1 && format(' --shard={0}/{1}', matrix.shard, inputs.playwright-shards) || '' }}${{ inputs.playwright-github-report && ' --reporter=blob,list' || '' }}
         env:
           # Firefox krever at HOME eies av brukeren, og containeren kjører som root
           HOME: /root
-
-      - name: 📸 Lagre snapshots midlertidig
-        id: snapshot-save
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() && steps.snapshot-sync.outcome == 'success' }}
-        shell: bash
-        run: |
-          : > /tmp/snapshots-etter.txt
-          if [ -d tests ]; then
-            find tests -path '*-snapshots/*.png' -type f -exec sha256sum {} + | sort > /tmp/snapshots-etter.txt
-          fi
-          # Nye eller endrede bilder. sha256sum skriver «<hash>  <sti>»
-          comm -13 /tmp/snapshots-for.txt /tmp/snapshots-etter.txt | cut -d' ' -f3- > /tmp/snapshot-files.txt
-          echo "Found $(wc -l < /tmp/snapshot-files.txt) changed snapshot files:"
-          cat /tmp/snapshot-files.txt
-          # Lages også uten endringer, slik at et omkjørt shard erstatter resultatet fra forrige forsøk
-          tar cf /tmp/snapshots.tar -T /tmp/snapshot-files.txt
-
-      # Publiseres alltid, også når baseline-synk eller lagring feilet, slik at commit-jobben ikke bruker et eldre forsøk
-      - name: 📸 Skriv snapshot-resultat
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
-        shell: bash
-        env:
-          SHARD: ${{ matrix.shard }}
-          ATTEMPT: ${{ github.run_attempt }}
-          BASELINE: ${{ needs.test-build.outputs.snapshot-baseline-sha }}
-          CACHE_KEY: ${{ needs.test-build.outputs.cache-key }}
-          LAGRET: ${{ steps.snapshot-save.outcome }}
-        run: |
-          rm -rf /tmp/snapshot-resultat
-          mkdir -p /tmp/snapshot-resultat
-          status=ugyldig
-          if [ "$LAGRET" = success ] && [ -f /tmp/snapshots.tar ]; then
-            status=ok
-            mv /tmp/snapshots.tar /tmp/snapshot-resultat/snapshots.tar
-          fi
-          printf 'status=%s\nshard=%s\nattempt=%s\nbaseline=%s\ncache-key=%s\n' \
-            "$status" "$SHARD" "$ATTEMPT" "$BASELINE" "$CACHE_KEY" > /tmp/snapshot-resultat/resultat.txt
-          cat /tmp/snapshot-resultat/resultat.txt
-
-      - name: ⬆️ Last opp snapshot-endringer
-        if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          # Unikt per forsøk. download-artifact velger ellers nyeste artefakt per navn, også fra tidligere forsøk
-          name: snapshot-changes-${{ matrix.shard }}-${{ github.run_attempt }}
-          path: /tmp/snapshot-resultat/
-          if-no-files-found: error
-          retention-days: 1
 
       - name: ⬆️ Last opp blob-report
         if: ${{ inputs.playwright-github-report && !cancelled() }}
@@ -407,106 +312,6 @@ jobs:
           path: blob-report/
           if-no-files-found: ignore
           retention-days: 1
-
-  playwright-commit-snapshots:
-    name: 📸 Commit Playwright-snapshots
-    needs: [test-build, playwright-tests]
-    if: ${{ inputs.playwright-snapshots && github.ref != 'refs/heads/main' && !cancelled() && needs.playwright-tests.result != 'skipped' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: 🔄 Hent kildekode
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
-
-      - name: 🔄 Hent snapshot-baseline fra main
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.test-build.outputs.snapshot-baseline-sha }}
-          path: .main-baseline
-
-      - name: 📸 Synk snapshot-baseline mot main
-        shell: bash
-        run: |
-          if [ -d .main-baseline/tests ]; then
-            find .main-baseline/tests -path '*-snapshots/*.png' -type f | while read -r f; do
-              rel="${f#.main-baseline/}"
-              mkdir -p "$(dirname "$rel")"
-              cp "$f" "$rel"
-            done
-          fi
-          rm -rf .main-baseline
-
-      - name: ⬇️ Last ned snapshot-endringer fra alle shards
-        uses: actions/download-artifact@v8
-        with:
-          pattern: snapshot-changes-*
-          path: /tmp/snapshot-artifacts
-
-      # Bruker bare nyeste forsøk per shard. Er det ugyldig eller fra en annen baseline/test-build, hoppes sharden over
-      - name: 📸 Gjenopprett snapshots
-        shell: bash
-        env:
-          BASELINE: ${{ needs.test-build.outputs.snapshot-baseline-sha }}
-          CACHE_KEY: ${{ needs.test-build.outputs.cache-key }}
-        run: |
-          shopt -s nullglob
-          verdi() { sed -n "s/^$1=//p" "$2" | head -n1; }
-          : > /tmp/snapshot-forsok.txt
-          for d in /tmp/snapshot-artifacts/snapshot-changes-*/; do
-            meta="${d}resultat.txt"
-            if [ ! -f "$meta" ]; then
-              echo "::warning::Mangler resultat.txt i $d"
-              continue
-            fi
-            shard=$(verdi shard "$meta")
-            attempt=$(verdi attempt "$meta")
-            if [[ ! "$shard" =~ ^[0-9]+$ || ! "$attempt" =~ ^[0-9]+$ ]]; then
-              echo "::warning::Ugyldig shard/forsøk i $meta"
-              continue
-            fi
-            echo "$shard $attempt $d" >> /tmp/snapshot-forsok.txt
-          done
-          sort -k1,1n -k2,2nr /tmp/snapshot-forsok.txt | awk '!sett[$1]++' | while read -r shard attempt d; do
-            meta="${d}resultat.txt"
-            if [ "$(verdi status "$meta")" != ok ]; then
-              echo "::warning::Shard $shard (forsøk $attempt) har ikke gyldige snapshots. Hopper over"
-            elif [ "$(verdi baseline "$meta")" != "$BASELINE" ] || [ "$(verdi cache-key "$meta")" != "$CACHE_KEY" ]; then
-              echo "::warning::Shard $shard (forsøk $attempt) er fra en annen baseline eller test-build. Hopper over"
-            else
-              echo "Gjenoppretter shard $shard fra forsøk $attempt"
-              tar xf "${d}snapshots.tar"
-            fi
-          done
-          find tests -path '*-snapshots/*.png' -type f | head -10 || true
-
-      - name: 📸 Commit oppdaterte snapshots
-        shell: bash
-        run: |
-          shopt -s globstar
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add tests/**/*-snapshots/**/*.png
-
-          for file in $(git diff --cached --name-only -- '*.png'); do
-            if git cat-file -e HEAD:"$file" 2>/dev/null; then
-              git show HEAD:"$file" > /tmp/old_snapshot.png
-              PIXELS=$(compare -metric AE /tmp/old_snapshot.png "$file" null: 2>&1 || true)
-              if [ "$PIXELS" = "0" ]; then
-                echo "Ingen visuell endring: $file"
-                git checkout HEAD -- "$file"
-              fi
-            fi
-          done
-
-          if git diff --cached --quiet; then
-            echo "No snapshot changes to commit"
-          else
-            git commit -m "oppdater playwright snapshots"
-            git push
-          fi
 
   playwright-report:
     name: 📊 Playwright Report
